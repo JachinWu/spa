@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>墾丁大冒險：親子夏季星空之旅</title>
+  
+  <!-- 載入 Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- 載入超輕量、免編譯的互動框架 Alpine.js CDN -->
+  <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  
+  <!-- 自訂 Tailwind 配置，加入慢速旋轉動畫 -->
+  <script>
+    window.tailwind.config = {
+      theme: {
+        extend: {
+          animation: {
+            'spin-slow': 'spin 12s linear infinite',
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white"
+      x-data="{ 
+        activeDay: 2, 
+        checklist: {
+          jacket: false,
+          light: false,
+          spray: false,
+          mat: false,
+          app: false
+        }
+      }">
+
+  <!-- 頂部星空橫幅 -->
+  <div class="relative overflow-hidden bg-gradient-to-b from-indigo-950 via-slate-900 to-slate-900 py-12 px-4 text-center border-b border-indigo-500/20">
+    <div class="absolute inset-0 opacity-40 pointer-events-none">
+      <div class="absolute top-10 left-1/4 w-1 h-1 bg-white rounded-full animate-ping"></div>
+      <div class="absolute top-20 right-1/4 w-1.5 h-1.5 bg-yellow-200 rounded-full animate-pulse"></div>
+      <div class="absolute top-32 left-1/3 w-0.5 h-0.5 bg-white rounded-full"></div>
+      <div class="absolute top-44 right-1/3 w-1 h-1 bg-cyan-300 rounded-full animate-pulse"></div>
+      <div class="absolute top-8 left-2/3 w-2 h-2 bg-purple-400 rounded-full opacity-30 blur-sm"></div>
+      <div class="absolute top-1/4 left-0 w-full h-24 bg-gradient-to-r from-transparent via-purple-500/10 to-transparent -rotate-12 transform scale-150"></div>
+    </div>
+
+    <div class="max-w-3xl mx-auto relative z-10">
+      <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-400/30 text-indigo-300 text-sm font-semibold mb-4 backdrop-blur-md">
+        <span class="flex h-2 w-2 relative">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        </span>
+        暑期限定・極致避暑無月光追星
+      </div>
+      <h1 class="text-3xl md:text-5xl font-extrabold tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-amber-200 via-rose-300 to-cyan-300 drop-shadow-md">
+        墾丁大冒險 🌌
+      </h1>
+      <p class="text-xl md:text-2xl font-bold mt-2 text-cyan-200 tracking-wide">
+        親子夏季星空海之旅
+      </p>
+      <p class="text-slate-400 text-sm md:text-base mt-3 max-w-lg mx-auto">
+        115 年 7月10日 (五) ~ 7月12日 (日) 三天兩夜行程
+        <br />
+        <span class="text-emerald-400 font-medium">特選！農曆五月廿六至廿八，黃金無月光觀看夏季銀河最佳時機</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- 主體網格 -->
+  <div class="max-w-6xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+    
+    <!-- 左側互動控制面板 -->
+    <div class="space-y-6">
+      
+      <!-- 三天冒險總覽地圖 (取代原本按鈕，更直觀好看) -->
+      <div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4 backdrop-blur-md shadow-xl">
+        <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-700/50">
+          <h3 class="text-lg font-extrabold text-slate-100 flex items-center gap-2">
+            <!-- 羅盤圖標 -->
+            <svg class="w-6 h-6 text-cyan-400 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+            三天冒險行程一覽
+          </h3>
+          <span class="text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30">點擊切換天數</span>
+        </div>
+        
+        <!-- 行程卡片堆疊 (一目了然) -->
+        <div class="space-y-3">
+          
+          <!-- Day 1 (粉色系) -->
+          <div @click="activeDay = 1"
+               :class="activeDay === 1 ? 'ring-2 ring-rose-500 bg-rose-950/40 border-rose-500/80 shadow-lg shadow-rose-500/10' : 'bg-slate-900/40 border-slate-800 opacity-60 hover:opacity-100 hover:border-slate-700'"
+               class="p-3.5 rounded-xl border transition-all duration-300 cursor-pointer relative overflow-hidden">
+            <div class="absolute -top-6 -right-6 w-12 h-12 bg-rose-500/10 rounded-full blur-lg"></div>
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">DAY 1</span>
+                <span class="text-sm font-bold text-slate-100">可可與音樂之夜 🍫</span>
+              </div>
+              <span class="text-[10px] text-rose-400 font-semibold bg-rose-500/5 px-1.5 py-0.5 rounded">阿信農場 ⛺</span>
+            </div>
+            <!-- 行程流 -->
+            <div class="flex flex-wrap items-center gap-y-1 gap-x-1.5 text-xs text-slate-300 font-medium">
+              <span>12:00 綠豆蒜 🍨</span>
+              <span class="text-slate-600 text-[10px]">➔</span>
+              <span>15:30 巧克力DIY 🍫</span>
+              <span class="text-slate-600 text-[10px]">➔</span>
+              <span>19:30 星空夜秀 🎭</span>
+            </div>
+          </div>
+          
+          <!-- Day 2 (藍色系) -->
+          <div @click="activeDay = 2"
+               :class="activeDay === 2 ? 'ring-2 ring-cyan-500 bg-cyan-950/40 border-cyan-500/80 shadow-lg shadow-cyan-500/10' : 'bg-slate-900/40 border-slate-800 opacity-60 hover:opacity-100 hover:border-slate-700'"
+               class="p-3.5 rounded-xl border transition-all duration-300 cursor-pointer relative overflow-hidden">
+            <div class="absolute -top-6 -right-6 w-12 h-12 bg-cyan-500/10 rounded-full blur-lg"></div>
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-black bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">DAY 2</span>
+                <span class="text-sm font-bold text-slate-100">海洋與銀河大冒險 🌌</span>
+              </div>
+              <span class="text-[10px] text-cyan-400 font-semibold bg-cyan-500/5 px-1.5 py-0.5 rounded">君臨農場 🏡</span>
+            </div>
+            <!-- 行程流 -->
+            <div class="flex flex-wrap items-center gap-y-1.5 gap-x-1.5 text-xs text-slate-300 font-medium">
+              <span>09:30 潮間帶 🐚</span>
+              <span class="text-slate-600 text-[10px]">➔</span>
+              <span>13:30 海生館 🐧</span>
+              <span class="text-slate-600 text-[10px]">➔</span>
+              <span>16:30 踏浪日落 🏖️</span>
+              <span class="text-slate-600 text-[10px]">➔</span>
+              <span>18:30 大街夜市 🍢</span>
+              <span class="text-slate-600 text-[10px]">➔</span>
+              <span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 text-[10px] font-black tracking-wide animate-pulse">
+                20:30 龍磐銀河 🌌 ✨
+              </span>
+            </div>
+          </div>
+          
+          <!-- Day 3 (黃色系) -->
+          <div @click="activeDay = 3"
+               :class="activeDay === 3 ? 'ring-2 ring-amber-500 bg-amber-950/40 border-amber-500/80 shadow-lg shadow-amber-500/10' : 'bg-slate-900/40 border-slate-800 opacity-60 hover:opacity-100 hover:border-slate-700'"
+               class="p-3.5 rounded-xl border transition-all duration-300 cursor-pointer relative overflow-hidden">
+            <div class="absolute -top-6 -right-6 w-12 h-12 bg-amber-500/10 rounded-full blur-lg"></div>
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30">DAY 3</span>
+                <span class="text-sm font-bold text-slate-100">南端地標巡禮 🗼</span>
+              </div>
+              <span class="text-[10px] text-amber-400 font-semibold bg-amber-500/5 px-1.5 py-0.5 rounded">平安返家 🚗</span>
+            </div>
+            <!-- 行程流 -->
+            <div class="flex flex-wrap items-center gap-y-1 gap-x-1.5 text-xs text-slate-300 font-medium">
+              <span>10:00 鵝鑾鼻燈塔 🗼</span>
+              <span class="text-slate-600 text-[10px]">➔</span>
+              <span>11:30 台灣最南點 ⚓</span>
+              <span class="text-slate-600 text-[10px]">➔</span>
+              <span>13:30 車城祈福 ⛩️</span>
+            </div>
+          </div>
+
+        </div>
+        
+        <!-- 住宿動態卡片 -->
+        <div class="mt-4 p-3 rounded-xl bg-slate-900/50 border border-slate-700/50">
+          <div class="flex items-center gap-2 text-rose-400 text-sm font-bold mb-1">
+            <!-- 帳篷圖標 -->
+            <svg class="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7l4-4m0 0l4 4m-4-4v18" />
+            </svg>
+            當晚住宿：
+          </div>
+          <!-- Day 1 Stay -->
+          <div x-show="activeDay === 1" x-transition>
+            <p class="text-white font-medium text-sm">阿信巧克力農場（星空露營帳篷）</p>
+            <p class="text-xs text-slate-400 mt-1 leading-relaxed">冷氣冷進心坎裡的野奢體驗！躺在豪華帳篷中，聽著蟲鳴看星斗，給孩子一場野外奢華初體驗。</p>
+          </div>
+          <!-- Day 2 Stay -->
+          <div x-show="activeDay === 2" x-transition>
+            <p class="text-white font-medium text-sm">君臨農場（緊鄰墾丁大街・出門即沙灘）</p>
+            <p class="text-xs text-slate-400 mt-1 leading-relaxed">鬧中取靜的絕佳落腳處！後門直通大灣沙灘踏浪，前門直達墾丁大街吃美食。往東開往龍磐公園追銀河僅需12分鐘，完美！</p>
+          </div>
+          <!-- Day 3 Stay -->
+          <div x-show="activeDay === 3" x-transition>
+            <p class="text-white font-medium text-sm">溫暖的家</p>
+            <p class="text-xs text-slate-400 mt-1 leading-relaxed">帶著滿天繁星、蔚藍海影以及孩子們無數個驚嘆的完美回憶，平安、充實地啟程返家。</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 星空預報智慧面板 -->
+      <div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4 backdrop-blur-md shadow-xl relative overflow-hidden">
+        <div class="absolute -top-12 -right-12 w-24 h-24 bg-indigo-500/10 rounded-full blur-xl"></div>
+        <h3 class="text-lg font-bold text-slate-200 mb-3 flex items-center gap-2">
+          <!-- 月亮圖標 -->
+          <svg class="w-6 h-6 text-indigo-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+          </svg>
+          銀河觀星黃金窗口
+        </h3>
+        <p class="text-xs text-slate-400 mb-4">
+          根據 115 年 7月墾丁天文對照表，為您算出每日不受月光干擾的璀璨觀星時間：
+        </p>
+
+        <div class="space-y-3">
+          <!-- 7/10 -->
+          <div @click="activeDay = 1" 
+               :class="activeDay === 1 ? 'bg-indigo-950/60 border-indigo-500 shadow-md' : 'bg-slate-900/40 border-slate-800 hover:border-slate-700'"
+               class="p-3 rounded-xl transition-all cursor-pointer border">
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-sm font-bold text-white">7/10 (五) 五月廿六</span>
+              <span class="text-xs text-amber-300 font-medium">⭐⭐⭐⭐⭐ 最佳推薦</span>
+            </div>
+            <div class="text-xs text-indigo-300 flex items-center gap-1">
+              <span class="inline-block w-1.5 h-1.5 bg-indigo-400 rounded-full"></span>
+              無月光窗口: <strong class="text-cyan-200 font-semibold">19:30 - 00:40 (超長 5 小時！)</strong>
+            </div>
+            <div class="text-xs text-slate-400 mt-1">今晚前半夜天空完全無光害，可見極清晰的壯麗銀河！</div>
+            <div class="text-[10px] text-slate-500 mt-1">月亮於 00:41 升起</div>
+          </div>
+
+          <!-- 7/11 -->
+          <div @click="activeDay = 2" 
+               :class="activeDay === 2 ? 'bg-indigo-950/60 border-indigo-500 shadow-md' : 'bg-slate-900/40 border-slate-800 hover:border-slate-700'"
+               class="p-3 rounded-xl transition-all cursor-pointer border">
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-sm font-bold text-white">7/11 (六) 五月廿七</span>
+              <span class="text-xs text-amber-300 font-medium">⭐⭐⭐⭐⭐ 完美無瑕</span>
+            </div>
+            <div class="text-xs text-indigo-300 flex items-center gap-1">
+              <span class="inline-block w-1.5 h-1.5 bg-indigo-400 rounded-full"></span>
+              無月光窗口: <strong class="text-cyan-200 font-semibold">19:30 - 01:27 (最適合看銀河！)</strong>
+            </div>
+            <div class="text-xs text-slate-400 mt-1">在大街晚餐與大灣踏浪後，驅車前往龍磐看銀河最順路！</div>
+            <div class="text-[10px] text-slate-500 mt-1">月亮於 01:28 升起</div>
+          </div>
+
+          <!-- 7/12 -->
+          <div @click="activeDay = 3" 
+               :class="activeDay === 3 ? 'bg-indigo-950/60 border-indigo-500 shadow-md' : 'bg-slate-900/40 border-slate-800 hover:border-slate-700'"
+               class="p-3 rounded-xl transition-all cursor-pointer border">
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-sm font-bold text-white">7/12 (日) 五月廿八</span>
+              <span class="text-xs text-amber-300 font-medium">⭐⭐⭐⭐⭐ 夜貓首選</span>
+            </div>
+            <div class="text-xs text-indigo-300 flex items-center gap-1">
+              <span class="inline-block w-1.5 h-1.5 bg-indigo-400 rounded-full"></span>
+              無月光窗口: <strong class="text-cyan-200 font-semibold">19:30 - 02:25 (後半夜才升起)</strong>
+            </div>
+            <div class="text-xs text-slate-400 mt-1">雖然是回程日，若留宿墾丁，這晚的銀河觀賞時間是三天中最長的。</div>
+            <div class="text-[10px] text-slate-500 mt-1">月亮於 02:26 升起</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 親子觀星裝備檢查清單 -->
+      <div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4 backdrop-blur-md shadow-xl">
+        <h3 class="text-lg font-bold text-slate-200 mb-3 flex items-center gap-2">
+          <!-- 星星圖標 -->
+          <svg class="w-5 h-5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+          </svg>
+          觀星裝備檢查清單
+        </h3>
+        <p class="text-xs text-slate-400 mb-3">攜帶這些物品，能讓孩子的觀星體驗加倍安全與好玩！</p>
+        <div class="space-y-2">
+          <label class="flex items-start gap-3 p-2 rounded-lg bg-slate-900/30 hover:bg-slate-900/50 cursor-pointer transition-colors">
+            <input type="checkbox" x-model="checklist.jacket" class="mt-1 rounded border-slate-600 text-indigo-600 focus:ring-indigo-500 bg-slate-700" />
+            <span :class="checklist.jacket ? 'line-through text-slate-500' : 'text-slate-300'" class="text-xs">防風薄外套 (龍磐公園夜晚風大涼爽)</span>
+          </label>
+          <label class="flex items-start gap-3 p-2 rounded-lg bg-slate-900/30 hover:bg-slate-900/50 cursor-pointer transition-colors">
+            <input type="checkbox" x-model="checklist.light" class="mt-1 rounded border-slate-600 text-indigo-600 focus:ring-indigo-500 bg-slate-700" />
+            <span :class="checklist.light ? 'line-through text-slate-500' : 'text-slate-300'" class="text-xs">手電筒 + 紅色玻璃紙 (保護眼睛夜視力)</span>
+          </label>
+          <label class="flex items-start gap-3 p-2 rounded-lg bg-slate-900/30 hover:bg-slate-900/50 cursor-pointer transition-colors">
+            <input type="checkbox" x-model="checklist.spray" class="mt-1 rounded border-slate-600 text-indigo-600 focus:ring-indigo-500 bg-slate-700" />
+            <span :class="checklist.spray ? 'line-through text-slate-500' : 'text-slate-300'" class="text-xs">防蚊液 (夏季防範草叢蚊蟲)</span>
+          </label>
+          <label class="flex items-start gap-3 p-2 rounded-lg bg-slate-900/30 hover:bg-slate-900/50 cursor-pointer transition-colors">
+            <input type="checkbox" x-model="checklist.mat" class="mt-1 rounded border-slate-600 text-indigo-600 focus:ring-indigo-500 bg-slate-700" />
+            <span :class="checklist.mat ? 'line-through text-slate-500' : 'text-slate-300'" class="text-xs">野餐墊 (躺在草原看漫天銀河最棒)</span>
+          </label>
+          <label class="flex items-start gap-3 p-2 rounded-lg bg-slate-900/30 hover:bg-slate-900/50 cursor-pointer transition-colors">
+            <input type="checkbox" x-model="checklist.app" class="mt-1 rounded border-slate-600 text-indigo-600 focus:ring-indigo-500 bg-slate-700" />
+            <span :class="checklist.app ? 'line-through text-slate-500' : 'text-slate-300'" class="text-xs">手機觀星 App (Stellarium / Star Walk 2)</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右側：動態行程路線與精美圖文描述 -->
+    <div class="lg:col-span-2 space-y-6">
+      <div class="bg-slate-800/50 border border-slate-700/80 rounded-2xl p-6 backdrop-blur-md shadow-2xl relative">
+        
+        <!-- ==================== DAY 1 ==================== -->
+        <div x-show="activeDay === 1" x-transition>
+          <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-700 pb-4 mb-6 gap-2">
+            <div>
+              <span class="text-xs text-indigo-400 font-extrabold uppercase tracking-widest">DAY 01 行程計畫</span>
+              <h2 class="text-2xl font-black text-white mt-1">可可與音樂之夜</h2>
+            </div>
+            <div class="px-3 py-1.5 rounded-xl bg-slate-900/60 border border-slate-700 text-xs text-slate-300 self-start md:self-auto">📅 7月10日 (五)</div>
+          </div>
+
+          <div class="space-y-8 relative before:absolute before:inset-y-1 before:left-3 md:before:left-4 before:w-0.5 before:bg-indigo-500/20">
+            <!-- Event 1 -->
+            <div class="relative pl-8 md:pl-10 group transition-all duration-300">
+              <div class="absolute left-1.5 md:left-2.5 top-1 w-3.5 h-3.5 rounded-full border-2 bg-slate-800 border-indigo-500 group-hover:border-amber-400"></div>
+              <div class="rounded-2xl border p-5 backdrop-blur-md transition-all duration-300 shadow-lg bg-gradient-to-br from-amber-50 to-orange-100 border-orange-200 text-slate-800">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg md:text-xl font-black px-2 py-0.5 rounded-lg bg-black/5">12:00</span>
+                    <h4 class="text-base md:text-lg font-bold tracking-tight text-slate-900">恆春古城午餐 ➔ 在地綠豆蒜消暑</h4>
+                  </div>
+                  <span class="text-2xl">🍨</span>
+                </div>
+                <div class="mb-4 overflow-hidden rounded-xl shadow-inner">
+                  <svg viewBox="0 0 200 120" class="w-full h-32 rounded-xl bg-orange-50/50">
+                    <circle cx="100" cy="70" r="40" fill="#fbd38d" opacity="0.6" />
+                    <ellipse cx="100" cy="85" rx="45" ry="15" fill="#f6ad55" />
+                    <path d="M80 50 Q 100 40 120 50" stroke="#dd6b20" stroke-width="3" fill="none" />
+                    <circle cx="85" cy="75" r="5" fill="#7b341e" />
+                    <circle cx="105" cy="70" r="4" fill="#7b341e" />
+                    <circle cx="120" cy="78" r="6" fill="#7b341e" />
+                    <circle cx="95" cy="82" r="5" fill="#7b341e" />
+                    <text x="100" y="30" text-anchor="middle" fill="#dd6b20" class="text-xs font-bold">消暑綠豆蒜</text>
+                  </svg>
+                </div>
+                <p class="text-xs md:text-sm leading-relaxed text-slate-700">避開烈日的大好時機！走進古意盎然的恆春小鎮，吹著涼爽冷氣，大口吸吮一口口Q彈香甜的在地古早味「綠豆蒜」。黑糖與剝皮綠豆完美結合，暑氣瞬間煙消雲散，快樂度百分百！</p>
+              </div>
+            </div>
+
+            <!-- Event 2 -->
+            <div class="relative pl-8 md:pl-10 group transition-all duration-300">
+              <div class="absolute left-1.5 md:left-2.5 top-1 w-3.5 h-3.5 rounded-full border-2 bg-slate-800 border-indigo-500 group-hover:border-amber-400"></div>
+              <div class="rounded-2xl border p-5 backdrop-blur-md transition-all duration-300 shadow-lg bg-gradient-to-br from-amber-100 to-amber-200 border-amber-300 text-slate-800">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg md:text-xl font-black px-2 py-0.5 rounded-lg bg-black/5">15:30</span>
+                    <h4 class="text-base md:text-lg font-bold tracking-tight text-slate-900">阿信農場巧克力 DIY 體驗</h4>
+                  </div>
+                  <span class="text-2xl">🍫</span>
+                </div>
+                <div class="mb-4 overflow-hidden rounded-xl shadow-inner">
+                  <svg viewBox="0 0 200 120" class="w-full h-32 rounded-xl bg-amber-50">
+                    <rect x="60" y="35" width="80" height="50" rx="6" fill="#4a2c2a" />
+                    <line x1="86" y1="35" x2="86" y2="85" stroke="#2c1614" stroke-width="2" />
+                    <line x1="113" y1="35" x2="113" y2="85" stroke="#2c1614" stroke-width="2" />
+                    <line x1="60" y1="60" x2="140" y2="60" stroke="#2c1614" stroke-width="2" />
+                    <path d="M50 30 Q 100 15 150 30" stroke="#d69e2e" stroke-width="2" fill="none" />
+                    <circle cx="140" cy="40" r="12" fill="#ecc94b" />
+                    <text x="100" y="105" text-anchor="middle" fill="#5c3a21" class="text-xs font-bold">可可 DIY 創作</text>
+                  </svg>
+                </div>
+                <p class="text-xs md:text-sm leading-relaxed text-slate-700">化身一日小小可可魔術師！走進滿溢香甜氣味的阿信農場，認識神奇的可可樹。大人小孩一起揉捏、塑形，發揮無限創意創作出專屬的美味巧克力，好吃又好玩，成就感爆表！</p>
+              </div>
+            </div>
+
+            <!-- Event 3 -->
+            <div class="relative pl-8 md:pl-10 group transition-all duration-300">
+              <div class="absolute left-1.5 md:left-2.5 top-1 w-3.5 h-3.5 rounded-full border-2 bg-slate-800 border-indigo-500 group-hover:border-amber-400"></div>
+              <div class="rounded-2xl border p-5 backdrop-blur-md transition-all duration-300 shadow-lg bg-gradient-to-br from-purple-50 to-indigo-100 border-purple-200 text-slate-800">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg md:text-xl font-black px-2 py-0.5 rounded-lg bg-black/5">19:30</span>
+                    <h4 class="text-base md:text-lg font-bold tracking-tight text-slate-900">悠活星空夜秀</h4>
+                  </div>
+                  <span class="text-2xl">🎭</span>
+                </div>
+                <div class="mb-4 overflow-hidden rounded-xl shadow-inner">
+                  <svg viewBox="0 0 200 120" class="w-full h-32 rounded-xl bg-indigo-950">
+                    <path d="M 0 120 Q 50 20 100 120 Q 150 20 200 120" fill="none" stroke="#818cf8" stroke-width="2" opacity="0.4" />
+                    <polygon points="100,10 70,120 130,120" fill="url(#lightGrad)" opacity="0.3" />
+                    <circle cx="100" cy="50" r="10" fill="#f43f5e" />
+                    <circle cx="70" cy="70" r="6" fill="#3b82f6" />
+                    <circle cx="130" cy="70" r="6" fill="#10b981" />
+                    <defs>
+                      <linearGradient id="lightGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#fbbf24" />
+                        <stop offset="100%" stop-color="#fbbf24" stop-opacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <text x="100" y="105" text-anchor="middle" fill="#cbd5e1" class="text-xs">奇幻極光夜秀</text>
+                  </svg>
+                </div>
+                <p class="text-xs md:text-sm leading-relaxed text-slate-700">夜幕降臨後的視覺盛宴！悠活大舞臺準時拉開序幕，震撼的音樂節奏、奇幻奪目的炫光效果與熱力四射的現場表演，帶動全場親子氣氛，讓掌聲與歡笑聲在熱帶海風中激盪！</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== DAY 2 ==================== -->
+        <div x-show="activeDay === 2" x-transition>
+          <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-700 pb-4 mb-6 gap-2">
+            <div>
+              <span class="text-xs text-indigo-400 font-extrabold uppercase tracking-widest">DAY 02 行程計畫</span>
+              <h2 class="text-2xl font-black text-white mt-1">海洋與銀河大冒險日</h2>
+            </div>
+            <div class="px-3 py-1.5 rounded-xl bg-slate-900/60 border border-slate-700 text-xs text-slate-300 self-start md:self-auto">📅 7月11日 (六)</div>
+          </div>
+
+          <div class="space-y-8 relative before:absolute before:inset-y-1 before:left-3 md:before:left-4 before:w-0.5 before:bg-indigo-500/20">
+            <!-- Event 1 -->
+            <div class="relative pl-8 md:pl-10 group transition-all duration-300">
+              <div class="absolute left-1.5 md:left-2.5 top-1 w-3.5 h-3.5 rounded-full border-2 bg-slate-800 border-indigo-500 group-hover:border-amber-400"></div>
+              <div class="rounded-2xl border p-5 backdrop-blur-md transition-all duration-300 shadow-lg bg-gradient-to-br from-teal-50 to-cyan-100 border-teal-200 text-slate-800">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg md:text-xl font-black px-2 py-0.5 rounded-lg bg-black/5">09:30</span>
+                    <h4 class="text-base md:text-lg font-bold tracking-tight text-slate-900">萬里桐潮間帶生態探險</h4>
+                  </div>
+                  <span class="text-2xl">🐚</span>
+                </div>
+                <div class="mb-4 overflow-hidden rounded-xl shadow-inner">
+                  <svg viewBox="0 0 200 120" class="w-full h-32 rounded-xl bg-cyan-50">
+                    <path d="M 0 100 Q 50 90 100 105 T 200 100 L 200 120 L 0 120 Z" fill="#0891b2" opacity="0.3" />
+                    <path d="M 40 100 C 60 70, 70 70, 90 100" fill="#0d9488" opacity="0.5" />
+                    <circle cx="110" cy="60" r="15" fill="#f43f5e" opacity="0.7" />
+                    <polygon points="110,40 113,50 123,53 113,56 110,66 107,56 97,53 107,50" fill="#f43f5e" />
+                    <path d="M 140 80 Q 150 70 160 80 Q 155 85 140 80" fill="#f97316" />
+                    <text x="100" y="25" text-anchor="middle" fill="#0f766e" class="text-xs font-bold">萬里桐潮間帶</text>
+                  </svg>
+                </div>
+                <p class="text-xs md:text-sm leading-relaxed text-slate-700">大自然的神奇水族箱！在退潮後的礁岩石縫間，帶孩子親自尋找藏在清澈水窪裡的小彩魚、海膽、緩慢移動的海參與揮舞著觸手的陽燧足。這是比任何教科書都要震撼的海洋第一課！</p>
+              </div>
+            </div>
+
+            <!-- Event 2 -->
+            <div class="relative pl-8 md:pl-10 group transition-all duration-300">
+              <div class="absolute left-1.5 md:left-2.5 top-1 w-3.5 h-3.5 rounded-full border-2 bg-slate-800 border-indigo-500 group-hover:border-amber-400"></div>
+              <div class="rounded-2xl border p-5 backdrop-blur-md transition-all duration-300 shadow-lg bg-gradient-to-br from-blue-50 to-indigo-100 border-blue-200 text-slate-800">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg md:text-xl font-black px-2 py-0.5 rounded-lg bg-black/5">13:30</span>
+                    <h4 class="text-base md:text-lg font-bold tracking-tight text-slate-900">屏東海生館 ➔ 尋找超萌小白鯨</h4>
+                  </div>
+                  <span class="text-2xl">🐧</span>
+                </div>
+                <div class="mb-4 overflow-hidden rounded-xl shadow-inner">
+                  <svg viewBox="0 0 200 120" class="w-full h-32 rounded-xl bg-blue-900">
+                    <path d="M10 110 Q 100 10 190 110" fill="none" stroke="#38bdf8" stroke-width="4" opacity="0.4" />
+                    <path d="M120 45 C100 30, 70 45, 60 60 C80 65, 110 55, 120 45" fill="#f8fafc" opacity="0.9" />
+                    <path d="M120 45 Q 135 40 145 42 Q 135 50 120 45" fill="#f8fafc" opacity="0.9" />
+                    <circle cx="30" cy="80" r="4" fill="#38bdf8" />
+                    <circle cx="45" cy="65" r="6" fill="#38bdf8" opacity="0.6" />
+                    <text x="100" y="105" text-anchor="middle" fill="#93c5fd" class="text-xs">藍色海底隧道</text>
+                  </svg>
+                </div>
+                <p class="text-xs md:text-sm leading-relaxed text-slate-700">避開酷暑、沁涼滿分！走在巨大的蔚藍海底隧道中，看魟魚從頭頂優雅飛過，和人氣王小白鯨俏皮揮手，再去極地館看可愛企鵝搖搖擺擺搶魚吃。冷氣超強，孩子放電與避暑的最完美交界！</p>
+              </div>
+            </div>
+
+            <!-- Event 3 -->
+            <div class="relative pl-8 md:pl-10 group transition-all duration-300">
+              <div class="absolute left-1.5 md:left-2.5 top-1 w-3.5 h-3.5 rounded-full border-2 bg-slate-800 border-indigo-500 group-hover:border-amber-400"></div>
+              <div class="rounded-2xl border p-5 backdrop-blur-md transition-all duration-300 shadow-lg bg-gradient-to-br from-orange-50 to-amber-100 border-orange-200 text-slate-800">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg md:text-xl font-black px-2 py-0.5 rounded-lg bg-black/5">16:30</span>
+                    <h4 class="text-base md:text-lg font-bold tracking-tight text-slate-900">大灣沙灘踏浪 ➔ 捕捉金黃日落</h4>
+                  </div>
+                  <span class="text-2xl">🏖️</span>
+                </div>
+                <div class="mb-4 overflow-hidden rounded-xl shadow-inner">
+                  <svg viewBox="0 0 200 120" class="w-full h-32 rounded-xl bg-amber-100">
+                    <circle cx="100" cy="60" r="30" fill="#f97316" />
+                    <path d="M 0 80 Q 100 65 200 80 L 200 120 L 0 120 Z" fill="#eab308" opacity="0.5" />
+                    <path d="M 0 95 Q 100 85 200 95 L 200 120 L 0 120 Z" fill="#fef08a" opacity="0.7" />
+                    <path d="M 30 40 L 40 50 L 30 60 Z" fill="#f97316" opacity="0.3" />
+                    <text x="100" y="110" text-anchor="middle" fill="#ea580c" class="text-xs font-bold">大灣夕陽黃金海</text>
+                  </svg>
+                </div>
+                <p class="text-xs md:text-sm leading-relaxed text-slate-700">踏水踩沙，愜意非凡！走出君臨農場就是遼闊的大灣沙灘。讓腳丫浸在溫暖的海水裡，與孩子一起堆座大沙堡。當夕陽逐漸把海面染成一片碎金，天地溫柔得讓人捨不得眨眼。</p>
+              </div>
+            </div>
+
+            <!-- Event 4 -->
+            <div class="relative pl-8 md:pl-10 group transition-all duration-300">
+              <div class="absolute left-1.5 md:left-2.5 top-1 w-3.5 h-3.5 rounded-full border-2 bg-slate-800 border-indigo-500 group-hover:border-amber-400"></div>
+              <div class="rounded-2xl border p-5 backdrop-blur-md transition-all duration-300 shadow-lg bg-gradient-to-br from-rose-50 to-red-100 border-rose-200 text-slate-800">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg md:text-xl font-black px-2 py-0.5 rounded-lg bg-black/5">18:30</span>
+                    <h4 class="text-base md:text-lg font-bold tracking-tight text-slate-900">墾丁大街夜市美食尋寶</h4>
+                  </div>
+                  <span class="text-2xl">🍢</span>
+                </div>
+                <div class="mb-4 overflow-hidden rounded-xl shadow-inner">
+                  <svg viewBox="0 0 200 120" class="w-full h-32 rounded-xl bg-rose-50">
+                    <rect x="50" y="40" width="30" height="40" fill="#fb7185" rx="3" />
+                    <rect x="120" y="30" width="35" height="50" fill="#f43f5e" rx="3" />
+                    <circle cx="65" cy="50" r="4" fill="#fff" />
+                    <circle cx="137" cy="45" r="6" fill="#fff" />
+                    <path d="M 95 20 L 95 80" stroke="#f43f5e" stroke-width="4" />
+                    <circle cx="95" cy="35" r="12" fill="#fbbf24" />
+                    <text x="95" y="39" text-anchor="middle" fill="#78350f" class="text-[9px] font-bold">串燒</text>
+                    <text x="100" y="105" text-anchor="middle" fill="#e11d48" class="text-xs font-bold">熱鬧墾丁大街</text>
+                  </svg>
+                </div>
+                <p class="text-xs md:text-sm leading-relaxed text-slate-700">五感大滿足的美食嘉年華！牽著孩子融入熱鬧的墾丁大街，碳烤BBQ、窯烤披薩、波霸奶茶到各式異國美味，香氣撲鼻而來。在喧囂歡樂的夜市大街裡盡情尋寶填飽肚子，為接下來的銀河夜探充飽體力！</p>
+              </div>
+            </div>
+
+            <!-- Event 5 (璀璨銀河高潮) -->
+            <div class="relative pl-8 md:pl-10 group transition-all duration-300 transform hover:scale-[1.02]">
+              <div class="absolute left-1.5 md:left-2.5 top-1 w-3.5 h-3.5 rounded-full border-2 bg-slate-800 border-indigo-400 ring-4 ring-indigo-500/30 scale-125"></div>
+              <div class="rounded-2xl border p-5 backdrop-blur-md transition-all duration-300 shadow-lg bg-gradient-to-br from-indigo-950 via-slate-900 to-indigo-950 border-indigo-500/50 shadow-indigo-500/10 text-slate-100">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg md:text-xl font-black px-2 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300">20:30</span>
+                    <h4 class="text-base md:text-lg font-bold tracking-tight text-white">【璀璨高潮】夜探龍磐大草原・邂逅夏季銀河</h4>
+                  </div>
+                  <span class="text-2xl">🌌</span>
+                </div>
+                <div class="mb-4 overflow-hidden rounded-xl shadow-inner border border-indigo-500/30">
+                  <svg viewBox="0 0 200 120" class="w-full h-32 rounded-xl bg-slate-950 overflow-hidden">
+                    <ellipse cx="100" cy="60" rx="90" ry="12" fill="url(#milkywayGrad)" transform="rotate(-25 100 60)" />
+                    <circle cx="30" cy="20" r="1.5" fill="#fff" class="animate-pulse" />
+                    <circle cx="160" cy="40" r="1" fill="#fff" />
+                    <circle cx="80" cy="80" r="2" fill="#38bdf8" />
+                    <circle cx="120" cy="25" r="1" fill="#fff" />
+                    <circle cx="50" cy="90" r="1.5" fill="#facc15" />
+                    <circle cx="150" cy="100" r="2.5" fill="#4ade80" />
+                    <circle cx="155" cy="100" r="2.5" fill="#4ade80" />
+                    <circle cx="150" cy="100" r="1.5" fill="#86efac" />
+                    <circle cx="155" cy="100" r="1.5" fill="#86efac" />
+                    <path d="M 0 110 Q 70 95 140 112 T 200 110 L 200 120 L 0 120 Z" fill="#0f172a" />
+                    <defs>
+                      <linearGradient id="milkywayGrad" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stop-color="#312e81" stop-opacity="0" />
+                        <stop offset="30%" stop-color="#6366f1" stop-opacity="0.6" />
+                        <stop offset="50%" stop-color="#c084fc" stop-opacity="0.8" />
+                        <stop offset="70%" stop-color="#6366f1" stop-opacity="0.6" />
+                        <stop offset="100%" stop-color="#312e81" stop-opacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <text x="100" y="115" text-anchor="middle" fill="#a5b4fc" class="text-[10px] tracking-wider font-bold">龍磐草原銀河 & 野生梅花鹿</text>
+                  </svg>
+                </div>
+                <p class="text-xs md:text-sm leading-relaxed text-indigo-200">一生必看、課本上走出來的星空奇蹟！從大街開車僅需12分鐘。此時夜空漆黑度100%（無月光干擾直到深夜01:28）。走上大草原，銀河緞帶從地平線拔地而起，直通蒼穹。當您與孩子躺在野餐墊上，看著璀璨的夏季銀河橫跨天際，甚至在草叢遠方，還能幸運照到野生梅花鹿晶瑩發亮的眼睛！</p>
+                
+                <div class="mt-4 p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 flex items-start gap-2">
+                  <!-- 小星星圖標 -->
+                  <svg class="w-4 h-4 text-amber-300 shrink-0 mt-0.5 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                  <div>
+                    <strong class="text-white block mb-0.5">💡 夏季銀河拍攝小撇步：</strong>
+                    用腳架架好手機或相機，開啟夜間模式或手動 M 模式（ISO 1600~3200、曝光15~20秒、光圈開最大），就能將這份壯麗天際線帶回家喔！
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== DAY 3 ==================== -->
+        <div x-show="activeDay === 3" x-transition>
+          <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-700 pb-4 mb-6 gap-2">
+            <div>
+              <span class="text-xs text-indigo-400 font-extrabold uppercase tracking-widest">DAY 03 行程計畫</span>
+              <h2 class="text-2xl font-black text-white mt-1">南端地標巡禮</h2>
+            </div>
+            <div class="px-3 py-1.5 rounded-xl bg-slate-900/60 border border-slate-700 text-xs text-slate-300 self-start md:self-auto">📅 7月12日 (日)</div>
+          </div>
+
+          <div class="space-y-8 relative before:absolute before:inset-y-1 before:left-3 md:before:left-4 before:w-0.5 before:bg-indigo-500/20">
+            <!-- Event 1 -->
+            <div class="relative pl-8 md:pl-10 group transition-all duration-300">
+              <div class="absolute left-1.5 md:left-2.5 top-1 w-3.5 h-3.5 rounded-full border-2 bg-slate-800 border-indigo-500 group-hover:border-amber-400"></div>
+              <div class="rounded-2xl border p-5 backdrop-blur-md transition-all duration-300 shadow-lg bg-gradient-to-br from-sky-50 to-blue-100 border-sky-200 text-slate-800">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg md:text-xl font-black px-2 py-0.5 rounded-lg bg-black/5">10:00</span>
+                    <h4 class="text-base md:text-lg font-bold tracking-tight text-slate-900">鵝鑾鼻燈塔 ➔ 蔚藍背景的完美大合照</h4>
+                  </div>
+                  <span class="text-2xl">🗼</span>
+                </div>
+                <div class="mb-4 overflow-hidden rounded-xl shadow-inner">
+                  <svg viewBox="0 0 200 120" class="w-full h-32 rounded-xl bg-sky-100">
+                    <path d="M 0 100 Q 100 85 200 100 L 200 120 L 0 120 Z" fill="#86efac" />
+                    <rect x="90" y="30" width="20" height="70" fill="#fff" />
+                    <polygon points="90,30 110,30 100,15" fill="#f43f5e" />
+                    <circle cx="100" cy="40" r="4" fill="#fbbf24" />
+                    <line x1="100" y1="40" x2="70" y2="25" stroke="#fbbf24" stroke-width="2" opacity="0.6" />
+                    <line x1="100" y1="40" x2="130" y2="25" stroke="#fbbf24" stroke-width="2" opacity="0.6" />
+                    <text x="100" y="115" text-anchor="middle" fill="#047857" class="text-xs font-bold">純白鵝鑾鼻燈塔</text>
+                  </svg>
+                </div>
+                <p class="text-xs md:text-sm leading-relaxed text-slate-700">白色巨塔下的完美家庭照！蔚藍透徹的晴空、翠綠綿延的大草坪，配上高聳矗立的純白色百年鵝鑾鼻燈塔。在這裡拍下全家人最陽光耀眼的合照，這就是明信片等級的墾丁經典美景！</p>
+              </div>
+            </div>
+
+            <!-- Event 2 -->
+            <div class="relative pl-8 md:pl-10 group transition-all duration-300">
+              <div class="absolute left-1.5 md:left-2.5 top-1 w-3.5 h-3.5 rounded-full border-2 bg-slate-800 border-indigo-500 group-hover:border-amber-400"></div>
+              <div class="rounded-2xl border p-5 backdrop-blur-md transition-all duration-300 shadow-lg bg-gradient-to-br from-teal-50 to-emerald-100 border-teal-200 text-slate-800">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg md:text-xl font-black px-2 py-0.5 rounded-lg bg-black/5">11:30</span>
+                    <h4 class="text-base md:text-lg font-bold tracking-tight text-slate-900">踩點「台灣最南點」國境之南</h4>
+                  </div>
+                  <span class="text-2xl">⚓</span>
+                </div>
+                <div class="mb-4 overflow-hidden rounded-xl shadow-inner">
+                  <svg viewBox="0 0 200 120" class="w-full h-32 rounded-xl bg-emerald-50">
+                    <path d="M 0 90 Q 100 75 200 90 L 200 120 L 0 120 Z" fill="#334155" />
+                    <path d="M 90 90 Q 100 30 105 30 Q 110 30 110 90" fill="#64748b" />
+                    <path d="M 110 90 Q 115 45 125 45 Q 130 45 120 90" fill="#475569" />
+                    <circle cx="50" cy="40" r="8" fill="#38bdf8" opacity="0.3" />
+                    <path d="M 10 95 Q 50 85 90 95" stroke="#0284c7" stroke-width="2" fill="none" opacity="0.4" />
+                    <text x="100" y="110" text-anchor="middle" fill="#f8fafc" class="text-[10px] font-bold">台灣最南點地標</text>
+                  </svg>
+                </div>
+                <p class="text-xs md:text-sm leading-relaxed text-slate-700">「孩子，我們現在踩在台灣的最底端了！」穿過幽靜茂密的防風林綠色隧道，抵達最南點意象石碑。站在這裡，左看太平洋、右看巴士海峽，看著海流激烈交會擊起的白色浪花，極具地理教育意義！</p>
+              </div>
+            </div>
+
+            <!-- Event 3 -->
+            <div class="relative pl-8 md:pl-10 group transition-all duration-300">
+              <div class="absolute left-1.5 md:left-2.5 top-1 w-3.5 h-3.5 rounded-full border-2 bg-slate-800 border-indigo-500 group-hover:border-amber-400"></div>
+              <div class="rounded-2xl border p-5 backdrop-blur-md transition-all duration-300 shadow-lg bg-gradient-to-br from-amber-50 to-yellow-100 border-amber-200 text-slate-800">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg md:text-xl font-black px-2 py-0.5 rounded-lg bg-black/5">13:30</span>
+                    <h4 class="text-base md:text-lg font-bold tracking-tight text-slate-900">車城福安宮祈福 ➔ 再來一碗綠豆蒜</h4>
+                  </div>
+                  <span class="text-2xl">⛩️</span>
+                </div>
+                <div class="mb-4 overflow-hidden rounded-xl shadow-inner">
+                  <svg viewBox="0 0 200 120" class="w-full h-32 rounded-xl bg-amber-50">
+                    <rect x="70" y="40" width="60" height="50" fill="#ef4444" opacity="0.8" />
+                    <rect x="80" y="55" width="40" height="35" fill="#fef08a" />
+                    <path d="M 60 40 Q 100 25 140 40" stroke="#f59e0b" stroke-width="6" fill="none" />
+                    <rect x="95" y="60" width="10" height="30" fill="#78350f" />
+                    <text x="100" y="110" text-anchor="middle" fill="#b91c1c" class="text-xs font-bold">車城福安宮祈福</text>
+                  </svg>
+                </div>
+                <p class="text-xs md:text-sm leading-relaxed text-slate-700">全台灣、甚至全亞洲最大土地公廟！參拜宏偉金碧的土地公，保佑全家人健康平安。返家前，絕對要到廟旁再來一碗鋪滿碎冰、綠豆、粉條的熱呼呼冷熱冰綠豆蒜，為這趟旅程畫下完美句點！</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 頁尾 -->
+  <footer class="border-t border-slate-800 mt-16 bg-slate-950 text-slate-500 py-8 text-center text-xs">
+    <div class="max-w-4xl mx-auto px-4 space-y-2">
+      <p class="text-slate-400 font-medium">墾丁親子星空大冒險 © 115年夏季旅行海報網頁版</p>
+      <p>數據來源：115年墾丁夏季月照、銀河天文預測資料表。實際觀星品質受當日氣候與雲量影響。</p>
+      <div class="flex justify-center gap-4 text-slate-600 mt-4">
+        <span>🌊 萬里桐潮間帶</span>
+        <span>🐬 屏東海生館</span>
+        <span>🌌 龍磐銀河</span>
+        <span>🦌 野生梅花鹿</span>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
