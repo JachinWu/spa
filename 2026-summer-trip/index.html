@@ -1,0 +1,383 @@
+```react
+import React, { useState } from 'react';
+
+// Custom SVG Icons to avoid library dependency issues and ensure consistent premium style
+const SunIcon = () => (
+  <svg className="w-6 h-6 text-amber-400 animate-spin-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M14 12a2 2 0 11-4 0 2 2 0 014 0z" />
+  </svg>
+);
+
+const MoonIcon = () => (
+  <svg className="w-6 h-6 text-indigo-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+  </svg>
+);
+
+const StarIcon = ({ className = "w-5 h-5 text-yellow-300" }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 20 20">
+    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+  </svg>
+);
+
+const TentIcon = () => (
+  <svg className="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7l4-4m0 0l4 4m-4-4v18" />
+  </svg>
+);
+
+const MapPinIcon = ({ className = "w-5 h-5 text-rose-500" }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+);
+
+const CompassIcon = () => (
+  <svg className="w-6 h-6 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+  </svg>
+);
+
+export default function App() {
+  const [activeDay, setActiveDay] = useState(2); // Default to Day 2 where Milky Way is added
+  const [selectedTime, setSelectedTime] = useState("21:00");
+  const [showChecklist, setShowChecklist] = useState({
+    jacket: false,
+    light: false,
+    spray: false,
+    mat: false,
+    app: false
+  });
+
+  // Table Data based on the uploaded table 1000012029.jpg for Jul 10 - Jul 12
+  const astronomyData = {
+    "7/10": {
+      moonrise: "00:41",
+      noMoonWindow: "19:30 - 00:40 (超長 5 小時！)",
+      rating: "⭐⭐⭐⭐⭐ 最佳推薦",
+      tips: "今晚前半夜天空完全無光害，可見極清晰的壯麗銀河！"
+    },
+    "7/11": {
+      moonrise: "01:28",
+      noMoonWindow: "19:30 - 01:27 (最適合搭配大街行程！)",
+      rating: "⭐⭐⭐⭐⭐ 完美無瑕",
+      tips: "搭配在大街晚餐與大灣踏浪後，驅車前往龍磐看銀河最順路！"
+    },
+    "7/12": {
+      moonrise: "02:26",
+      noMoonWindow: "19:30 - 02:25 (後半夜才升起)",
+      rating: "⭐⭐⭐⭐⭐ 夜貓首選",
+      tips: "雖然是回程日，但若留宿墾丁，這晚的銀河觀賞時間是三天中最長的。"
+    }
+  };
+
+  // Detailed Itinerary Data with Graphic/Illustration styling concepts & highly attractive text descriptions
+  const itinerary = {
+    1: {
+      title: "可可與音樂之夜",
+      stay: "阿信巧克力農場（星空露營帳篷）",
+      stayDesc: "冷氣冷進心坎裡的野奢體驗！躺在豪華帳篷中，聽著蟲鳴看星斗，給孩子一場野外奢華初體驗。",
+      events: [
+        {
+          time: "12:00",
+          title: "恆春古城午餐 ➔ 在地綠豆蒜消暑",
+          icon: "🍨",
+          bgGradient: "from-amber-50 to-orange-100",
+          borderColor: "border-orange-200",
+          desc: "避開烈日的大好時機！走進古意盎然的恆春小鎮，吹著涼爽冷氣，大口吸吮一口口Q彈香甜的在地古早味「綠豆蒜」。黑糖與剝皮綠豆完美結合，暑氣瞬間煙消雲散，快樂度百分百！",
+          svgIllustration: (
+            <svg viewBox="0 0 200 120" className="w-full h-32 rounded-xl bg-orange-50/50">
+              <circle cx="100" cy="70" r="40" fill="#fbd38d" opacity="0.6" />
+              <ellipse cx="100" cy="85" rx="45" ry="15" fill="#f6ad55" />
+              <path d="M80 50 Q 100 40 120 50" stroke="#dd6b20" strokeWidth="3" fill="none" />
+              <circle cx="85" cy="75" r="5" fill="#7b341e" />
+              <circle cx="105" cy="70" r="4" fill="#7b341e" />
+              <circle cx="120" cy="78" r="6" fill="#7b341e" />
+              <circle cx="95" cy="82" r="5" fill="#7b341e" />
+              <text x="100" y="30" textAnchor="middle" fill="#dd6b20" className="text-xs font-bold">消暑綠豆蒜</text>
+            </svg>
+          )
+        },
+        {
+          time: "15:30",
+          title: "阿信農場巧克力 DIY 體驗",
+          icon: "🍫",
+          bgGradient: "from-amber-100 to-amber-200",
+          borderColor: "border-amber-300",
+          desc: "化身一日小小可可魔術師！走進滿溢香甜氣味的阿信農場，認識神奇的可可樹。大人小孩一起揉捏、塑形，發揮無限創意創作出專屬的美味巧克力，好吃又好玩，成就感爆表！",
+          svgIllustration: (
+            <svg viewBox="0 0 200 120" className="w-full h-32 rounded-xl bg-amber-50">
+              <rect x="60" y="35" width="80" height="50" rx="6" fill="#4a2c2a" />
+              <line x1="86" y1="35" x2="86" y2="85" stroke="#2c1614" strokeWidth="2" />
+              <line x1="113" y1="35" x2="113" y2="85" stroke="#2c1614" strokeWidth="2" />
+              <line x1="60" y1="60" x2="140" y2="60" stroke="#2c1614" strokeWidth="2" />
+              <path d="M50 30 Q 100 15 150 30" stroke="#d69e2e" strokeWidth="2" fill="none" />
+              <circle cx="140" cy="40" r="12" fill="#ecc94b" />
+              <text x="100" y="105" textAnchor="middle" fill="#5c3a21" className="text-xs font-bold">可可 DIY 創作</text>
+            </svg>
+          )
+        },
+        {
+          time: "19:30",
+          title: "悠活星空夜秀",
+          icon: "🎭",
+          bgGradient: "from-purple-50 to-indigo-100",
+          borderColor: "border-purple-200",
+          desc: "夜幕降臨後的視覺盛宴！悠活大舞臺準時拉開序幕，震撼的音樂節奏、奇幻奪目的炫光效果與熱力四射的現場表演，帶動全場親子氣氛，讓掌聲與歡笑聲在熱帶海風中激盪！",
+          svgIllustration: (
+            <svg viewBox="0 0 200 120" className="w-full h-32 rounded-xl bg-indigo-950">
+              <path d="M 0 120 Q 50 20 100 120 Q 150 20 200 120" fill="none" stroke="#818cf8" strokeWidth="2" opacity="0.4" />
+              <polygon points="100,10 70,120 130,120" fill="url(#lightGrad)" opacity="0.3" />
+              <circle cx="100" cy="50" r="10" fill="#f43f5e" />
+              <circle cx="70" cy="70" r="6" fill="#3b82f6" />
+              <circle cx="130" cy="70" r="6" fill="#10b981" />
+              <defs>
+                <linearGradient id="lightGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#fbbf24" />
+                  <stop offset="100%" stopColor="#fbbf24" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <text x="100" y="105" textAnchor="middle" fill="#cbd5e1" className="text-xs">奇幻極光夜秀</text>
+            </svg>
+          )
+        }
+      ]
+    },
+    2: {
+      title: "海洋與銀河大冒險日",
+      stay: "君臨農場（緊鄰墾丁大街・出門即沙灘）",
+      stayDesc: "鬧中取靜的絕佳落腳處！後門直通大灣沙灘踏浪，前門直達墾丁大街吃美食。往東開往龍磐公園追銀河僅需12分鐘，完美！",
+      events: [
+        {
+          time: "09:30",
+          title: "萬里桐潮間帶生態探險",
+          icon: "🐚",
+          bgGradient: "from-teal-50 to-cyan-100",
+          borderColor: "border-teal-200",
+          desc: "大自然的神奇水族箱！在退潮後的礁岩石縫間，帶孩子親自尋找藏在清澈水窪裡的小彩魚、海膽、緩慢移動的海參與揮舞著觸手的陽燧足。這是比任何教科書都要震撼的海洋第一課！",
+          svgIllustration: (
+            <svg viewBox="0 0 200 120" className="w-full h-32 rounded-xl bg-cyan-50">
+              <path d="M 0 100 Q 50 90 100 105 T 200 100 L 200 120 L 0 120 Z" fill="#0891b2" opacity="0.3" />
+              <path d="M 40 100 C 60 70, 70 70, 90 100" fill="#0d9488" opacity="0.5" />
+              <circle cx="110" cy="60" r="15" fill="#f43f5e" opacity="0.7" /> {/* Starfish placeholder */}
+              <polygon points="110,40 113,50 123,53 113,56 110,66 107,56 97,53 107,50" fill="#f43f5e" />
+              <path d="M 140 80 Q 150 70 160 80 Q 155 85 140 80" fill="#f97316" /> {/* Clownfish */}
+              <text x="100" y="25" textAnchor="middle" fill="#0f766e" className="text-xs font-bold">萬里桐潮間帶</text>
+            </svg>
+          )
+        },
+        {
+          time: "13:30",
+          title: "屏東海生館 ➔ 尋找超萌小白鯨",
+          icon: "🐧",
+          bgGradient: "from-blue-50 to-indigo-100",
+          borderColor: "border-blue-200",
+          desc: "避開酷暑、沁涼滿分！走在巨大的蔚藍海底隧道中，看魟魚從頭頂優雅飛過，和人氣王小白鯨俏皮揮手，再去極地館看可愛企鵝搖搖擺擺搶魚吃。冷氣超強，孩子放電與避暑的最完美交界！",
+          svgIllustration: (
+            <svg viewBox="0 0 200 120" className="w-full h-32 rounded-xl bg-blue-900">
+              <path d="M10 110 Q 100 10 190 110" fill="none" stroke="#38bdf8" strokeWidth="4" opacity="0.4" />
+              <path d="M120 45 C100 30, 70 45, 60 60 C80 65, 110 55, 120 45" fill="#f8fafc" opacity="0.9" /> {/* Whale body */}
+              <path d="M120 45 Q 135 40 145 42 Q 135 50 120 45" fill="#f8fafc" opacity="0.9" /> {/* Tail */}
+              <circle cx="30" cy="80" r="4" fill="#38bdf8" />
+              <circle cx="45" cy="65" r="6" fill="#38bdf8" opacity="0.6" />
+              <text x="100" y="105" textAnchor="middle" fill="#93c5fd" className="text-xs">藍色海底隧道</text>
+            </svg>
+          )
+        },
+        {
+          time: "16:30",
+          title: "大灣沙灘踏浪 ➔ 捕捉金黃日落",
+          icon: "🏖️",
+          bgGradient: "from-orange-50 to-amber-100",
+          borderColor: "border-orange-200",
+          desc: "踏水踩沙，愜意非凡！走出君臨農場就是遼闊的大灣沙灘。讓腳丫浸在溫暖的海水裡，與孩子一起堆座大沙堡。當夕陽逐漸把海面染成一片碎金，天地溫柔得讓人捨不得眨眼。",
+          svgIllustration: (
+            <svg viewBox="0 0 200 120" className="w-full h-32 rounded-xl bg-amber-100">
+              <circle cx="100" cy="60" r="30" fill="#f97316" />
+              <path d="M 0 80 Q 100 65 200 80 L 200 120 L 0 120 Z" fill="#eab308" opacity="0.5" />
+              <path d="M 0 95 Q 100 85 200 95 L 200 120 L 0 120 Z" fill="#fef08a" opacity="0.7" />
+              <path d="M 30 40 L 40 50 L 30 60 Z" fill="#f97316" opacity="0.3" />
+              <text x="100" y="110" textAnchor="middle" fill="#ea580c" className="text-xs font-bold">大灣夕陽黃金海</text>
+            </svg>
+          )
+        },
+        {
+          time: "18:30",
+          title: "墾丁大街夜市美食尋寶",
+          icon: "🍢",
+          bgGradient: "from-rose-50 to-red-100",
+          borderColor: "border-rose-200",
+          desc: "五感大滿足的美食嘉年華！牽著孩子融入熱鬧的墾丁大街，碳烤BBQ、窯烤披薩、波霸奶茶到各式異國美味，香氣撲鼻而來。在喧囂歡樂的夜市大街裡盡情尋寶填飽肚子，為接下來的銀河夜探充飽體力！",
+          svgIllustration: (
+            <svg viewBox="0 0 200 120" className="w-full h-32 rounded-xl bg-rose-50">
+              <rect x="50" y="40" width="30" height="40" fill="#fb7185" rx="3" />
+              <rect x="120" y="30" width="35" height="50" fill="#f43f5e" rx="3" />
+              <circle cx="65" cy="50" r="4" fill="#fff" />
+              <circle cx="137" cy="45" r="6" fill="#fff" />
+              <path d="M 95 20 L 95 80" stroke="#f43f5e" strokeWidth="4" />
+              <circle cx="95" cy="35" r="12" fill="#fbbf24" />
+              <text x="95" y="39" textAnchor="middle" fill="#78350f" className="text-[9px] font-bold">串燒</text>
+              <text x="100" y="105" textAnchor="middle" fill="#e11d48" className="text-xs font-bold">熱鬧墾丁大街</text>
+            </svg>
+          )
+        },
+        {
+          time: "20:30",
+          title: "【璀璨高潮】夜探龍磐大草原・邂逅夏季銀河 🌌",
+          icon: "✨",
+          bgGradient: "from-blue-950 via-slate-900 to-indigo-950",
+          borderColor: "border-indigo-500",
+          isMilkyWay: true,
+          desc: "一生必看、課本上走出來的星空奇蹟！從大街開車僅需12分鐘。此時夜空漆黑度100%（無月光干擾直到深夜01:28）。走上大草原，銀河緞帶從地平線拔地而起，直通蒼穹。當您與孩子躺在野餐墊上，看著璀璨的夏季銀河橫跨天際，甚至在草叢遠方，還能幸運照到野生梅花鹿晶瑩發亮的眼睛！",
+          svgIllustration: (
+            <svg viewBox="0 0 200 120" className="w-full h-32 rounded-xl bg-slate-950 border border-indigo-500/30 overflow-hidden">
+              {/* Milky Way stars representation */}
+              <ellipse cx="100" cy="60" rx="90" ry="12" fill="url(#milkywayGrad)" transform="rotate(-25 100 60)" />
+              <circle cx="30" cy="20" r="1.5" fill="#fff" className="animate-pulse" />
+              <circle cx="160" cy="40" r="1" fill="#fff" />
+              <circle cx="80" cy="80" r="2" fill="#38bdf8" />
+              <circle cx="120" cy="25" r="1" fill="#fff" />
+              <circle cx="50" cy="90" r="1.5" fill="#facc15" />
+              {/* Deer eyes */}
+              <circle cx="150" cy="100" r="2.5" fill="#4ade80" className="animate-ping" />
+              <circle cx="155" cy="100" r="2.5" fill="#4ade80" className="animate-ping" />
+              <circle cx="150" cy="100" r="1.5" fill="#86efac" />
+              <circle cx="155" cy="100" r="1.5" fill="#86efac" />
+              {/* Ground silhouette */}
+              <path d="M 0 110 Q 70 95 140 112 T 200 110 L 200 120 L 0 120 Z" fill="#0f172a" />
+              <defs>
+                <linearGradient id="milkywayGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#312e81" stopOpacity="0" />
+                  <stop offset="30%" stopColor="#6366f1" stopOpacity="0.6" />
+                  <stop offset="50%" stopColor="#c084fc" stopOpacity="0.8" />
+                  <stop offset="70%" stopColor="#6366f1" stopOpacity="0.6" />
+                  <stop offset="100%" stopColor="#312e81" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <text x="100" y="115" textAnchor="middle" fill="#a5b4fc" className="text-[10px] tracking-wider font-bold">龍磐草原銀河 & 野生梅花鹿</text>
+            </svg>
+          )
+        }
+      ]
+    },
+    3: {
+      title: "南端地標巡禮",
+      stay: "溫暖的家",
+      stayDesc: "帶著滿天繁星、蔚藍海影以及孩子們無數個驚嘆的完美回憶，平安、充實地啟程返家。",
+      events: [
+        {
+          time: "10:00",
+          title: "鵝鑾鼻燈塔 ➔ 蔚藍背景的完美大合照",
+          icon: "🗼",
+          bgGradient: "from-sky-50 to-blue-100",
+          borderColor: "border-sky-200",
+          desc: "白色巨塔下的完美家庭照！蔚藍透徹的晴空、翠綠綿延的大草坪，配上高聳矗立的純白色百年鵝鑾鼻燈塔。在這裡拍下全家人最陽光耀眼的合照，這就是明信片等級的墾丁經典美景！",
+          svgIllustration: (
+            <svg viewBox="0 0 200 120" className="w-full h-32 rounded-xl bg-sky-100">
+              <path d="M 0 100 Q 100 85 200 100 L 200 120 L 0 120 Z" fill="#86efac" />
+              <rect x="90" y="30" width="20" height="70" fill="#fff" />
+              <polygon points="90,30 110,30 100,15" fill="#f43f5e" />
+              <circle cx="100" cy="40" r="4" fill="#fbbf24" />
+              <line x1="100" y1="40" x2="70" y2="25" stroke="#fbbf24" strokeWidth="2" opacity="0.6" />
+              <line x1="100" y1="40" x2="130" y2="25" stroke="#fbbf24" strokeWidth="2" opacity="0.6" />
+              <text x="100" y="115" textAnchor="middle" fill="#047857" className="text-xs font-bold">純白鵝鑾鼻燈塔</text>
+            </svg>
+          )
+        },
+        {
+          time: "11:30",
+          title: "踩點「台灣最南點」國境之南",
+          icon: "⚓",
+          bgGradient: "from-teal-50 to-emerald-100",
+          borderColor: "border-teal-200",
+          desc: "「孩子，我們現在踩在台灣的最底端了！」穿過幽靜茂密的防風林綠色隧道，抵達最南點意象石碑。站在這裡，左看太平洋、右看巴士海峽，看著海流激烈交會擊起的白色浪花，極具地理教育意義！",
+          svgIllustration: (
+            <svg viewBox="0 0 200 120" className="w-full h-32 rounded-xl bg-emerald-50">
+              <path d="M 0 90 Q 100 75 200 90 L 200 120 L 0 120 Z" fill="#334155" />
+              {/* Monument structure */}
+              <path d="M 90 90 Q 100 30 105 30 Q 110 30 110 90" fill="#64748b" />
+              <path d="M 110 90 Q 115 45 125 45 Q 130 45 120 90" fill="#475569" />
+              <circle cx="50" cy="40" r="8" fill="#38bdf8" opacity="0.3" />
+              <path d="M 10 95 Q 50 85 90 95" stroke="#0284c7" strokeWidth="2" fill="none" opacity="0.4" />
+              <text x="100" y="110" textAnchor="middle" fill="#f8fafc" className="text-[10px] font-bold">台灣最南點地標</text>
+            </svg>
+          )
+        },
+        {
+          time: "13:30",
+          title: "車城福安宮祈福 ➔ 再來一碗綠豆蒜",
+          icon: "⛩️",
+          bgGradient: "from-amber-50 to-yellow-100",
+          borderColor: "border-amber-200",
+          desc: "全台灣、甚至全亞洲最大土地公廟！參拜宏偉金碧的土地公，保佑全家人健康平安。返家前，絕對要到廟旁再來一碗鋪滿碎冰、綠豆、粉條的熱呼呼冷熱冰綠豆蒜，為這趟旅程畫下完美句點！",
+          svgIllustration: (
+            <svg viewBox="0 0 200 120" className="w-full h-32 rounded-xl bg-amber-50">
+              {/* Chinese Temple Gate style */}
+              <rect x="70" y="40" width="60" height="50" fill="#ef4444" opacity="0.8" />
+              <rect x="80" y="55" width="40" height="35" fill="#fef08a" />
+              <path d="M 60 40 Q 100 25 140 40" stroke="#f59e0b" strokeWidth="6" fill="none" />
+              <rect x="95" y="60" width="10" height="30" fill="#78350f" />
+              <text x="100" y="110" textAnchor="middle" fill="#b91c1c" className="text-xs font-bold">車城福安宮祈福</text>
+            </svg>
+          )
+        }
+      ]
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-900 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white">
+      {/* Dynamic Starry Sky Background Hero */}
+      <div className="relative overflow-hidden bg-gradient-to-b from-indigo-950 via-slate-900 to-slate-900 py-12 px-4 text-center border-b border-indigo-500/20">
+        <div className="absolute inset-0 opacity-40 pointer-events-none">
+          {/* Star particles */}
+          <div className="absolute top-10 left-1/4 w-1 h-1 bg-white rounded-full animate-ping"></div>
+          <div className="absolute top-20 right-1/4 w-1.5 h-1.5 bg-yellow-200 rounded-full animate-pulse"></div>
+          <div className="absolute top-32 left-1/3 w-0.5 h-0.5 bg-white rounded-full"></div>
+          <div className="absolute top-44 right-1/3 w-1 h-1 bg-cyan-300 rounded-full animate-pulse"></div>
+          <div className="absolute top-8 left-2/3 w-2 h-2 bg-purple-400 rounded-full opacity-30 blur-sm"></div>
+          {/* Elegant diagonal starry trail */}
+          <div className="absolute top-1/4 left-0 w-full h-24 bg-gradient-to-r from-transparent via-purple-500/10 to-transparent -rotate-12 transform scale-150"></div>
+        </div>
+
+        <div className="max-w-3xl mx-auto relative z-10">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-400/30 text-indigo-300 text-sm font-semibold mb-4 backdrop-blur-md">
+            <span className="flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            暑期限定・極致避暑無月光追星
+          </div>
+          <h1 className="text-3xl md:text-5xl font-extrabold tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-amber-200 via-rose-300 to-cyan-300 drop-shadow-md">
+            墾丁大冒險 🌌
+          </h1>
+          <p className="text-xl md:text-2xl font-bold mt-2 text-cyan-200 tracking-wide">
+            親子夏季星空海之旅
+          </p>
+          <p className="text-slate-400 text-sm md:text-base mt-3 max-w-lg mx-auto">
+            115 年 7月10日 (五) ~ 7月12日 (日) 三天兩夜行程
+            <br />
+            <span className="text-emerald-400 font-medium">特選！農曆五月廿六至廿八，黃金無月光觀看夏季銀河最佳時機</span>
+          </p>
+        </div>
+      </div>
+
+      {/* Main Content Grid */}
+      <div className="max-w-6xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Left Interactive Panel: Observation tool, Map Overview, Preparation packing list */}
+        <div className="space-y-6">
+          {/* Day Selection Tabs (Sticky or Static) */}
+          <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-4 backdrop-blur-md shadow-xl">
+            <h3 className="text-lg font-bold text-slate-200 mb-3 flex items-center gap-2">
+              <CompassIcon /> 選擇探險天數
+            </h3>
+            <div className="grid grid-cols-3 gap-2">
+              {[1, 2, 3].map((day) => (
+                <button
+                  key={day}
+                  onClick={() => setActiveDay(day)}
+                  className={`py-3 px-2 rounded-xl text-center transition-all duration-300 border font-bold ${
+                    activeDay === day
+                      ? 'bg-gradient-to-br from-ind
