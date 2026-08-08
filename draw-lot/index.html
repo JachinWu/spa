@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>停車位抽籤系統</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .input-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: inline-block;
+            width: 150px;
+        }
+        input, textarea {
+            width: 300px;
+        }
+        button {
+            margin-top: 10px;
+            margin-right: 10px;
+        }
+        #result {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>停車位抽籤系統</h1>
+    
+    <div class="input-group">
+        <label for="parkingStart">停車位號碼範圍：</label>
+        <input type="number" id="parkingStart" placeholder="起始號碼">
+        <input type="number" id="parkingEnd" placeholder="結束號碼">
+    </div>
+
+    <div class="input-group">
+        <label for="areaAB">區域AB停車位：</label>
+        <textarea id="areaAB" rows="3" placeholder="請輸入停車位號碼，以逗號分隔"></textarea>
+    </div>
+
+    <div class="input-group">
+        <label for="areaCD">區域CD停車位：</label>
+        <textarea id="areaCD" rows="3" placeholder="請輸入停車位號碼，以逗號分隔"></textarea>
+    </div>
+
+    <div class="input-group">
+        <label for="groupA">不分區域人員：</label>
+        <textarea id="groupA" rows="3" placeholder="請輸入人員名稱，每行一個"></textarea>
+    </div>
+
+    <div class="input-group">
+        <label for="groupB">區域AB人員：</label>
+        <textarea id="groupB" rows="3" placeholder="請輸入人員名稱，每行一個"></textarea>
+    </div>
+
+    <div class="input-group">
+        <label for="groupC">區域CD人員：</label>
+        <textarea id="groupC" rows="3" placeholder="請輸入人員名稱，每行一個"></textarea>
+    </div>
+
+    <button onclick="assignAll()">分配不分區域人員</button>
+    <button onclick="assignAB()">分配區域AB人員</button>
+    <button onclick="assignCD()">分配區域CD人員</button>
+
+    <div id="result"></div>
+
+    <script>
+        let allParkingSpots = [];
+        let assignedSpots = {};
+
+        function init() {
+            const start = parseInt(document.getElementById('parkingStart').value);
+            const end = parseInt(document.getElementById('parkingEnd').value);
+            allParkingSpots = Array.from({length: end - start + 1}, (_, i) => i + start);
+            assignedSpots = {};
+        }
+
+        function getAvailableSpots(spots) {
+            return spots.filter(spot => !Object.values(assignedSpots).includes(spot));
+        }
+
+        function assignSpots(people, spots) {
+            const availableSpots = getAvailableSpots(spots);
+            people.forEach(person => {
+                if (availableSpots.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * availableSpots.length);
+                    const spot = availableSpots.splice(randomIndex, 1)[0];
+                    assignedSpots[person] = spot;
+                }
+            });
+        }
+
+        function assignAll() {
+            init();
+            const people = document.getElementById('groupA').value.split('\n').filter(p => p.trim());
+            assignSpots(people, allParkingSpots);
+            updateResult();
+        }
+
+        function assignAB() {
+            const people = document.getElementById('groupB').value.split('\n').filter(p => p.trim());
+            const spots = document.getElementById('areaAB').value.split(',').map(s => parseInt(s.trim()));
+            assignSpots(people, spots);
+            updateResult();
+        }
+
+        function assignCD() {
+            const people = document.getElementById('groupC').value.split('\n').filter(p => p.trim());
+            const spots = document.getElementById('areaCD').value.split(',').map(s => parseInt(s.trim()));
+            assignSpots(people, spots);
+            updateResult();
+        }
+
+        function updateResult() {
+            let result = '<h2>分配結果</h2>';
+            result += '<h3>已分配的停車位</h3>';
+            result += '<ul>';
+            for (const [person, spot] of Object.entries(assignedSpots)) {
+                result += `<li>${person}: ${spot}</li>`;
+            }
+            result += '</ul>';
+
+            result += '<h3>未分配的停車位</h3>';
+            const unassignedSpots = getAvailableSpots(allParkingSpots);
+            result += '<ul>';
+            unassignedSpots.forEach(spot => {
+                result += `<li>${spot}</li>`;
+            });
+            result += '</ul>';
+
+            document.getElementById('result').innerHTML = result;
+        }
+    </script>
+</body>
+</html>
