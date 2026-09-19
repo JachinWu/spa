@@ -3,35 +3,48 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>YOLO License Plate Detector</title>
+  <title>Plate Patrol</title>
   <link rel="stylesheet" href="./style.css">
-  <!-- 預先引入 ONNX Runtime Web，供後續步驟使用 -->
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
 </head>
 <body>
   <div id="container">
-    <!-- 相機底層視訊 -->
-    <video id="webcam" autoplay playsinline muted></video>
+    <!-- 相機視訊層 -->
+    <video id="webcam" autoplay playsinline webkit-playsinline muted></video>
     
-    <!-- 繪製偵測框的透明疊加層 -->
+    <!-- 繪製偵測框與浮水印的疊加層 -->
     <canvas id="overlay"></canvas>
 
-    <!-- 介面資訊 HUD -->
+    <!-- 頂部 HUD -->
     <div id="hud">
       <div id="status">正在啟動相機...</div>
       <div id="fps">FPS: --</div>
     </div>
 
-    <!-- 輔助對焦/車牌參考引導框（非強制，但可引導使用者對準） -->
+    <!-- 中央車牌引導框 -->
     <div id="guide-box">
       <div class="corner top-left"></div>
       <div class="corner top-right"></div>
       <div class="corner bottom-left"></div>
       <div class="corner bottom-right"></div>
-      <span class="guide-text">請將車牌置於框內</span>
+      <span class="guide-text" id="guide-text">請將車牌對準此框</span>
+    </div>
+
+    <!-- 右下角即時日期時間 -->
+    <div id="timestamp">--</div>
+
+    <!-- 拍照閃光特效層 -->
+    <div id="flash-overlay"></div>
+
+    <!-- 底部快門拍照按鈕 -->
+    <div id="controls">
+      <button id="shutter-btn" aria-label="拍照">
+        <div class="shutter-inner"></div>
+      </button>
     </div>
   </div>
 
   <script src="./app.js"></script>
 </body>
+</html>
 </html>
