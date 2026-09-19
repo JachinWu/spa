@@ -2,38 +2,53 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Plate Patrol</title>
   <link rel="stylesheet" href="./style.css">
+  <!-- ONNX Runtime Web -->
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+  <!-- 純前端 OCR 引擎 -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
   <div id="container">
-    <!-- 相機視訊層 -->
     <video id="webcam" autoplay playsinline webkit-playsinline muted></video>
-    
-    <!-- 繪製偵測框與浮水印的疊加層 -->
     <canvas id="overlay"></canvas>
 
-    <!-- 頂部 HUD -->
+    <!-- 頂部資訊列 -->
     <div id="hud">
       <div id="status">正在啟動相機...</div>
       <div id="fps">FPS: --</div>
     </div>
 
-    <!-- 中央車牌引導框 -->
+    <!-- 中央引導框 -->
     <div id="guide-box">
       <div class="corner top-left"></div>
       <div class="corner top-right"></div>
       <div class="corner bottom-left"></div>
       <div class="corner bottom-right"></div>
+      <!-- 辨識結果顯示標籤 -->
+      <div id="plate-result-badge">--</div>
       <span class="guide-text" id="guide-text">請將車牌對準此框</span>
     </div>
 
-    <!-- 右下角即時日期時間 -->
+    <!-- 右下角時間（強制置頂顯示） -->
     <div id="timestamp">--</div>
 
-    <!-- 拍照閃光特效層 -->
+    <!-- 拍照閃光層 -->
+    <div id="flash-overlay"></div>
+
+    <!-- 底部快門按鈕區 -->
+    <div id="controls">
+      <button id="shutter-btn" type="button" aria-label="拍照">
+        <div class="shutter-inner"></div>
+      </button>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
     <div id="flash-overlay"></div>
 
     <!-- 底部快門拍照按鈕 -->
