@@ -4,13 +4,12 @@ const ctx = overlay.getContext("2d");
 const statusElem = document.getElementById("status");
 const fpsElem = document.getElementById("fps");
 
-// 模型設定 (若使用 320 匯出模型請改為 320)
-const MODEL_SIZE = 320; 
+// 設定：因為匯出時是 imgsz=320，此處鎖定 320
+const MODEL_SIZE = 320;
 const MODEL_PATH = "./yolov8n.onnx";
 const CONF_THRESHOLD = 0.45;
 const IOU_THRESHOLD = 0.45;
 
-// COCO 80 類別標籤
 const COCO_CLASSES = [
   "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat",
   "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat",
@@ -30,19 +29,28 @@ let lastFrameTime = performance.now();
 let frameCount = 0;
 let fps = 0;
 
-// 用於影像前處理的離屏 Canvas
+// 全域錯誤捕捉，直接顯示在螢幕上
+window.addEventListener("error", (e) => {
+  showError(`全域錯誤: ${e.message} (行號: ${e.lineno})`);
+});
+
+function showError(msg) {
+  statusElem.innerText = msg;
+  statusElem.style.background = "rgba(230, 40, 40, 0.9)";
+  console.error(msg);
+}
+
+// 離屏 Canvas 供前處理抽幀
 const offscreenCanvas = document.createElement("canvas");
 offscreenCanvas.width = MODEL_SIZE;
 offscreenCanvas.height = MODEL_SIZE;
 const offscreenCtx = offscreenCanvas.getContext("2d", { willReadFrequently: true });
 
-function showError(msg) {
-  statusElem.innerText = `錯誤: ${msg}`;
-  statusElem.style.background = "rgba(230, 40, 40, 0.85)";
-  console.error(msg);
-}
-
 async function setupCamera() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    throw new Error("瀏覽器不支援相機或非 HTTPS 環境");
+  }
+
   const constraints = {
     audio: false,
     video: {
@@ -61,10 +69,10 @@ async function setupCamera() {
         await video.play();
         resolve(video);
       } catch (err) {
-        reject(err);
+        reject(new Error("自動播放被阻擋，請點擊螢幕: " + err.message));
       }
     };
-    video.onerror = (e) => reject(e);
+    video.onerror = () => reject(new Error("Video 元素載入串流失敗"));
   });
 }
 
@@ -82,21 +90,16 @@ function updateCanvasSize() {
   ctx.scale(dpr, dpr);
 }
 
-/**
- * 影像前處理：Letterbox 等比縮放並轉換為 NCHW Tensor
- */
 function preprocess(videoElement) {
   const vw = videoElement.videoWidth;
   const vh = videoElement.videoHeight;
-  
-  // 計算等比例縮放與 Padding (Letterbox)
+
   const scale = Math.min(MODEL_SIZE / vw, MODEL_SIZE / vh);
   const nw = Math.round(vw * scale);
   const nh = Math.round(vh * scale);
   const padX = (MODEL_SIZE - nw) / 2;
   const padY = (MODEL_SIZE - nh) / 2;
 
-  // 繪製至離屏 Canvas
   offscreenCtx.fillStyle = "#808080";
   offscreenCtx.fillRect(0, 0, MODEL_SIZE, MODEL_SIZE);
   offscreenCtx.drawImage(videoElement, 0, 0, vw, vh, padX, padY, nw, nh);
@@ -104,27 +107,19 @@ function preprocess(videoElement) {
   const imgData = offscreenCtx.getImageData(0, 0, MODEL_SIZE, MODEL_SIZE);
   const pixels = imgData.data;
 
-  // 轉換為 Float32Array [1, 3, MODEL_SIZE, MODEL_SIZE] (RGB 歸一化)
   const floatData = new Float32Array(3 * MODEL_SIZE * MODEL_SIZE);
   const channelLength = MODEL_SIZE * MODEL_SIZE;
 
   for (let i = 0; i < channelLength; i++) {
-    const r = pixels[i * 4] / 255.0;
-    const g = pixels[i * 4 + 1] / 255.0;
-    const b = pixels[i * 4 + 2] / 255.0;
-
-    floatData[i] = r;                              // R 通道
-    floatData[channelLength + i] = g;              // G 通道
-    floatData[2 * channelLength + i] = b;          // B 通道
+    floatData[i] = pixels[i * 4] / 255.0;
+    floatData[channelLength + i] = pixels[i * 4 + 1] / 255.0;
+    floatData[2 * channelLength + i] = pixels[i * 4 + 2] / 255.0;
   }
 
   const tensor = new ort.Tensor("float32", floatData, [1, 3, MODEL_SIZE, MODEL_SIZE]);
   return { tensor, scale, padX, padY };
 }
 
-/**
- * 計算 IoU 供 NMS 使用
- */
 function iou(boxA, boxB) {
   const xA = Math.max(boxA[0], boxB[0]);
   const yA = Math.max(boxA[1], boxB[1]);
@@ -138,18 +133,16 @@ function iou(boxA, boxB) {
   return interArea / (areaA + areaB - interArea);
 }
 
-/**
- * 後處理：解析輸出張量 [1, 84, 8400] 並執行 NMS
- */
 function postprocess(outputTensor, scale, padX, padY) {
-  const [_, channels, numBoxes] = outputTensor.dims;
+  // 安全取出維度，避免解構語法問題
+  const channels = outputTensor.dims[1];
+  const numBoxes = outputTensor.dims[2];
   const data = outputTensor.data;
-  const numClasses = channels - 4; // 84 - 4 = 80
+  const numClasses = channels - 4;
 
   const candidates = [];
 
   for (let i = 0; i < numBoxes; i++) {
-    // 找出類別最大機率
     let maxScore = 0;
     let classId = -1;
     for (let c = 0; c < numClasses; c++) {
@@ -166,7 +159,6 @@ function postprocess(outputTensor, scale, padX, padY) {
       const w = data[2 * numBoxes + i];
       const h = data[3 * numBoxes + i];
 
-      // 轉換回原圖座標 (扣除 padding 並除以 scale)
       const x1 = (cx - w / 2 - padX) / scale;
       const y1 = (cy - h / 2 - padY) / scale;
       const x2 = (cx + w / 2 - padX) / scale;
@@ -180,10 +172,8 @@ function postprocess(outputTensor, scale, padX, padY) {
     }
   }
 
-  // 根據分數降冪排序
   candidates.sort((a, b) => b.score - a.score);
 
-  // NMS 過濾
   const finalBoxes = [];
   while (candidates.length > 0) {
     const current = candidates.shift();
@@ -199,9 +189,6 @@ function postprocess(outputTensor, scale, padX, padY) {
   return finalBoxes;
 }
 
-/**
- * 將偵測結果精準繪製在螢幕上 (映射 CSS object-fit: cover 座標)
- */
 function drawDetections(boxes) {
   ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
@@ -210,7 +197,6 @@ function drawDetections(boxes) {
   const videoW = video.videoWidth;
   const videoH = video.videoHeight;
 
-  // object-fit: cover 映射縮放比例與平移偏移量
   const renderScale = Math.max(screenW / videoW, screenH / videoH);
   const offsetX = (screenW - videoW * renderScale) / 2;
   const offsetY = (screenH - videoH * renderScale) / 2;
@@ -220,22 +206,18 @@ function drawDetections(boxes) {
     const label = COCO_CLASSES[item.classId] || `ID: ${item.classId}`;
     const score = Math.round(item.score * 100);
 
-    // 映射到螢幕顯示像素
     const sx = x1 * renderScale + offsetX;
     const sy = y1 * renderScale + offsetY;
     const sw = (x2 - x1) * renderScale;
     const sh = (y2 - y1) * renderScale;
 
-    // 若是車輛相關類別加重顯示
     const isVehicle = ["car", "motorcycle", "bus", "truck"].includes(label);
     const boxColor = isVehicle ? "#00ff88" : "#00bbff";
 
-    // 繪製框線
     ctx.strokeStyle = boxColor;
     ctx.lineWidth = isVehicle ? 3 : 2;
     ctx.strokeRect(sx, sy, sw, sh);
 
-    // 繪製標籤背板與文字
     const text = `${label.toUpperCase()} ${score}%`;
     ctx.font = "bold 12px sans-serif";
     const textWidth = ctx.measureText(text).width;
@@ -248,9 +230,6 @@ function drawDetections(boxes) {
   });
 }
 
-/**
- * 主推論迴圈
- */
 async function runInference() {
   if (isProcessing || !session || video.readyState < 2) {
     requestAnimationFrame(runInference);
@@ -258,24 +237,16 @@ async function runInference() {
   }
 
   isProcessing = true;
-  const startTime = performance.now();
 
   try {
-    // 1. 前處理
     const { tensor, scale, padX, padY } = preprocess(video);
-
-    // 2. 執行推論
     const feeds = { [session.inputNames[0]]: tensor };
     const results = await session.run(feeds);
     const outputTensor = results[session.outputNames[0]];
 
-    // 3. 後處理
     const boxes = postprocess(outputTensor, scale, padX, padY);
-
-    // 4. 繪製動態框
     drawDetections(boxes);
 
-    // 計算 FPS
     frameCount++;
     const now = performance.now();
     if (now - lastFrameTime >= 1000) {
@@ -285,7 +256,7 @@ async function runInference() {
       fpsElem.innerText = `FPS: ${fps}`;
     }
   } catch (err) {
-    console.error("推論出錯:", err);
+    console.error("推論錯誤:", err);
   } finally {
     isProcessing = false;
     requestAnimationFrame(runInference);
@@ -294,115 +265,35 @@ async function runInference() {
 
 async function init() {
   try {
-    statusElem.innerText = "正在啟動鏡頭...";
+    statusElem.innerText = "1/3 正在啟動鏡頭...";
     await setupCamera();
     updateCanvasSize();
     window.addEventListener("resize", updateCanvasSize);
 
-    statusElem.innerText = "載入 YOLO 模型中 (約 10MB)...";
+    statusElem.innerText = "2/3 載入 YOLO 模型中 (約 6MB)...";
+    
+    // 檢查 onnxruntime 是否正確載入
+    if (typeof ort === "undefined") {
+      throw new Error("ort.min.js CDN 未能成功載入，請檢查網路連線");
+    }
 
-    // 設定 ONNX Runtime Web 使用 WebGL 進行硬體加速
     ort.env.wasm.numThreads = 1;
+    // 優先 WebGL，若瀏覽器不支援則降級至 WASM
     session = await ort.InferenceSession.create(MODEL_PATH, {
       executionProviders: ["webgl", "wasm"]
     });
 
-    statusElem.innerText = "推論運作中";
+    statusElem.innerText = "3/3 偵測運作中";
     runInference();
   } catch (err) {
-    showError(err.message || "載入失敗");
+    showError(`錯誤: ${err.message || err}`);
   }
 }
 
-init();
-    // 改用 loadeddata，並設置超時防呆
-    video.onloadeddata = async () => {
-      try {
-        await video.play();
-        resolve(video);
-      } catch (err) {
-        reject(new Error("自動播放失敗，請點擊螢幕重試: " + err.message));
-      }
-    };
-
-    video.onerror = (e) => {
-      reject(new Error("Video 元素載入串流錯誤"));
-    };
-
-    // 5 秒逾時保護
-    setTimeout(() => {
-      if (video.readyState < 2) {
-        reject(new Error("相機串流載入超時 (readyState: " + video.readyState + ")"));
-      }
-    }, 5000);
-  });
-}
-
-function updateCanvasSize() {
-  const dpr = window.devicePixelRatio || 1;
-  const width = window.innerWidth;
-  const height = window.innerHeight;
-
-  overlay.width = width * dpr;
-  overlay.height = height * dpr;
-  overlay.style.width = `${width}px`;
-  overlay.style.height = `${height}px`;
-
-  ctx.scale(dpr, dpr);
-}
-
-function renderLoop() {
-  const now = performance.now();
-  frameCount++;
-  if (now - lastFrameTime >= 1000) {
-    fps = frameCount;
-    frameCount = 0;
-    lastFrameTime = now;
-    fpsElem.innerText = `FPS: ${fps}`;
-  }
-
-  ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-
-  const boxW = 220;
-  const boxH = 75;
-  const cx = window.innerWidth / 2 - boxW / 2;
-  const cy = window.innerHeight / 2 - boxH / 2;
-
-  ctx.strokeStyle = "#00ff88";
-  ctx.lineWidth = 3;
-  ctx.strokeRect(cx, cy, boxW, boxH);
-
-  ctx.fillStyle = "#00ff88";
-  ctx.fillRect(cx, cy - 24, 120, 24);
-  ctx.fillStyle = "#000";
-  ctx.font = "bold 13px sans-serif";
-  ctx.fillText("PLATE TEST", cx + 8, cy - 7);
-
-  requestAnimationFrame(renderLoop);
-}
-
-async function init() {
-  try {
-    statusElem.innerText = "正在偵測鏡頭設備...";
-    await setupCamera();
-
-    updateCanvasSize();
-    window.addEventListener("resize", updateCanvasSize);
-
-    statusElem.innerText = "鏡頭就緒 (預覽中)";
-    renderLoop();
-  } catch (err) {
-    showError(err.name ? `${err.name}: ${err.message}` : err.message);
-  }
-}
-
-// 若有自動播放政策限制，允許點擊畫面喚醒播放
+// 點擊喚醒播放保險機制
 window.addEventListener("click", () => {
   if (video.srcObject && video.paused) {
-    video.play().then(() => {
-      statusElem.innerText = "鏡頭就緒 (預覽中)";
-      renderLoop();
-    }).catch(e => showError(e.message));
+    video.play().catch(e => showError("播放失敗: " + e.message));
   }
 }, { once: true });
 
