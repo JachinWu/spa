@@ -128,7 +128,7 @@ body, html {
 /* 右下角時間戳 (拉高 z-index 並調高位置避免被按鈕與工具列擋住) */
 #timestamp {
   position: absolute;
-  bottom: max(110px, calc(env(safe-area-inset-bottom) + 100px));
+  bottom: max(190px, calc(env(safe-area-inset-bottom) + 185px));
   right: 16px;
   z-index: 25;
   color: #fff;
@@ -141,10 +141,10 @@ body, html {
   pointer-events: none;
 }
 
-/* 底部快門控制區 */
+/* 底部快門控制區（上移約一個按鈕高度，避免貼齊螢幕底緣） */
 #controls {
   position: absolute;
-  bottom: max(24px, env(safe-area-inset-bottom));
+  bottom: max(100px, calc(env(safe-area-inset-bottom) + 90px));
   left: 0;
   width: 100%;
   display: flex;

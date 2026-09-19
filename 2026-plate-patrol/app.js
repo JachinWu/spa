@@ -298,19 +298,35 @@ async function recognizePlateText() {
       .replace(/[^A-Z0-9]/gi, "")
       .toUpperCase();
 
-    const plate = normalizeTaiwanPlate(rawText);
+    const strict = normalizeTaiwanPlate(rawText);
+    // 寬鬆後備：只要是 5~8 碼且英數混合，即視為可用的車牌候選（避免永遠卡在辨識中）
+    const loose = looseCandidate(rawText);
+    const plate = strict || loose;
 
     if (plate) {
-      // 候選投票：同一車牌需被辨識到 2 次以上才確認，降低誤判
+      // 記錄候選出現次數，取出現最多者作為最終結果（穩定顯示）
       plateCandidateCounts[plate] = (plateCandidateCounts[plate] || 0) + 1;
-      if (plateCandidateCounts[plate] >= 2 || patrolState === STATE.CONFIRMED) {
-        recognizedPlate = plate;
-        plateResultBadge.innerText = recognizedPlate;
-        plateResultBadge.style.display = "block";
+
+      // 選出目前票數最高的候選
+      let best = plate;
+      let bestCount = plateCandidateCounts[plate];
+      for (const k in plateCandidateCounts) {
+        if (plateCandidateCounts[k] > bestCount) {
+          best = k;
+          bestCount = plateCandidateCounts[k];
+        }
+      }
+
+      recognizedPlate = best;
+      plateResultBadge.innerText = recognizedPlate;
+      plateResultBadge.style.display = "block";
+
+      // 嚴格格式命中，或同一候選出現 2 次以上 → 視為確認
+      if (strict || bestCount >= 2) {
         patrolState = STATE.CONFIRMED;
         guideText.innerText = "辨識成功：" + recognizedPlate;
       } else {
-        guideText.innerText = "辨識中…（比對確認）";
+        guideText.innerText = "偵測到：" + recognizedPlate + "（比對確認中）";
       }
     } else {
       // 沒抓到有效車牌：回到明確的可繼續狀態，不會卡住
@@ -354,6 +370,22 @@ function normalizeTaiwanPlate(s) {
   }
   // 沒有完全符合格式，但長度合理且英數混合 → 視為未確認，回傳 null 讓其繼續嘗試
   return null;
+}
+
+/**
+ * 寬鬆車牌候選：不要求完全符合官方格式，只要是 5~8 碼英數混合即接受，
+ * 並嘗試在英文字母與數字交界處插入連字號以貼近台灣車牌樣式。
+ * 目的是避免因 OCR 雜訊導致永遠無法產生結果（卡在辨識中）。
+ */
+function looseCandidate(s) {
+  if (!s) return null;
+  if (s.length < 5 || s.length > 8) return null;
+  if (!/[A-Z]/.test(s) || !/[0-9]/.test(s)) return null;
+
+  // 在「字母群↔數字群」的單一交界處加上連字號（例如 ABC1234 -> ABC-1234）
+  const m = s.match(/^([A-Z]+)(\d+)$/) || s.match(/^(\d+)([A-Z]+)$/);
+  if (m) return `${m[1]}-${m[2]}`;
+  return s; // 交界複雜時直接回傳清理後字串
 }
 
 function drawDetections(boxes) {
@@ -422,10 +454,10 @@ function drawDetections(boxes) {
 
     guideBox.classList.add("active");
 
-    // 只有在「已鎖定」狀態才允許啟動車牌 OCR 辨識
-    if (patrolState === STATE.LOCKED) {
+    // 已鎖定（或已確認需持續更新）狀態才允許啟動車牌 OCR 辨識
+    if (patrolState === STATE.LOCKED || patrolState === STATE.CONFIRMED) {
       const now = performance.now();
-      if (now - lastOcrTime > 800) {
+      if (!isOcrRunning && now - lastOcrTime > 800) {
         lastOcrTime = now;
         recognizePlateText();
       }
