@@ -15,11 +15,19 @@ const MODEL_PATH = "./plate_best.onnx";
 const CONF_THRESHOLD = 0.35;   // 車牌專用模型，門檻略降以提升召回
 const IOU_THRESHOLD = 0.45;
 
-// 車牌專用模型僅有單一類別
+// === 車牌 OCR 模型 (fast-plate-ocr cct-s-v2-global) ===
+const OCR_MODEL_PATH = "./plate_ocr.onnx";
+const OCR_IMG_H = 64;          // 模型輸入高
+const OCR_IMG_W = 128;         // 模型輸入寬
+const OCR_SLOTS = 10;          // 最多 10 個字元槽
+const OCR_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_"; // 37 類
+const OCR_PAD_CHAR = "_";
+let ocrSession = null;
+
+// 車牌專用偵測模型僅有單一類別
 const PLATE_CLASSES = ["license_plate"];
 
 let session = null;
-let ocrWorker = null;
 let isProcessing = false;
 let isOcrRunning = false;
 let lastOcrTime = 0;
@@ -217,15 +225,17 @@ function postprocess(outputTensor, scale, padX, padY) {
 }
 
 /**
- * 裁切「偵測到的車牌框」區域進行 OCR 文字辨識
+ * 裁切「偵測到的車牌框」，送入 OCR ONNX 模型辨識字元。
+ * 模型: fast-plate-ocr cct-s-v2-global
+ *   輸入 [1,64,128,3] uint8 (RGB, NHWC)
+ *   輸出 plate [1,10,37] → 每個字元槽對 37 類做 argmax
  */
 async function recognizePlateText() {
-  if (isOcrRunning || !ocrWorker || video.readyState < 2) return;
+  if (isOcrRunning || !ocrSession || video.readyState < 2) return;
   // 未鎖定車牌、或尚無車牌框時，不進行辨識
   if (patrolState === STATE.SEARCHING || !bestPlateBox) return;
 
   isOcrRunning = true;
-  // 僅在尚未確認車牌時顯示「辨識中」，且結束時一定會離開此狀態（不再卡住）
   if (patrolState !== STATE.CONFIRMED) {
     guideText.innerText = "車牌辨識中…";
   }
@@ -234,11 +244,10 @@ async function recognizePlateText() {
     const videoW = video.videoWidth;
     const videoH = video.videoHeight;
 
-    // bestPlateBox 已是原始視訊像素座標 [x1,y1,x2,y2]
-    // 向外擴張一點邊界，避免切到字元
+    // bestPlateBox 為原始視訊像素座標 [x1,y1,x2,y2]，向外擴張避免切到字元
     const [bx1, by1, bx2, by2] = bestPlateBox;
-    const padW = (bx2 - bx1) * 0.06;
-    const padH = (by2 - by1) * 0.12;
+    const padW = (bx2 - bx1) * 0.04;
+    const padH = (by2 - by1) * 0.08;
 
     const cropX = Math.max(0, bx1 - padW);
     const cropY = Math.max(0, by1 - padH);
@@ -246,84 +255,75 @@ async function recognizePlateText() {
     const cropH = Math.min(videoH - cropY, (by2 - by1) + padH * 2);
 
     if (cropW < 8 || cropH < 8) {
-      guideText.innerText = "車輛已鎖定 - 對準車牌";
+      guideText.innerText = "車牌已鎖定 - 對準車牌";
       return;
     }
 
-    // 放大裁切區以提升小字元辨識率（車牌框通常較小）
-    const scaleUp = 3;
-    cropCanvas.width = Math.round(cropW * scaleUp);
-    cropCanvas.height = Math.round(cropH * scaleUp);
-
+    // 直接縮放到模型輸入尺寸 128x64（不保留長寬比，符合模型設定）
+    cropCanvas.width = OCR_IMG_W;
+    cropCanvas.height = OCR_IMG_H;
     cropCtx.drawImage(
       video,
       cropX, cropY, cropW, cropH,
-      0, 0, cropCanvas.width, cropCanvas.height
+      0, 0, OCR_IMG_W, OCR_IMG_H
     );
 
-    // 灰階 + 自適應門檻（以平均亮度為基準）二值化，較固定門檻更耐光線變化
-    const imgData = cropCtx.getImageData(0, 0, cropCanvas.width, cropCanvas.height);
-    const d = imgData.data;
-    let sum = 0;
-    const gray = new Float32Array(d.length / 4);
-    for (let i = 0, g = 0; i < d.length; i += 4, g++) {
-      const v = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
-      gray[g] = v;
-      sum += v;
+    const imgData = cropCtx.getImageData(0, 0, OCR_IMG_W, OCR_IMG_H);
+    const d = imgData.data; // RGBA
+    // 組成 uint8 NHWC RGB 張量 [1,64,128,3]
+    const input = new Uint8Array(OCR_IMG_H * OCR_IMG_W * 3);
+    for (let p = 0, o = 0; p < d.length; p += 4, o += 3) {
+      input[o] = d[p];       // R
+      input[o + 1] = d[p + 1]; // G
+      input[o + 2] = d[p + 2]; // B
     }
-    const mean = sum / gray.length;
-    const threshold = mean * 0.9; // 略低於平均，保留深色字元
-    for (let i = 0, g = 0; i < d.length; i += 4, g++) {
-      const binary = gray[g] > threshold ? 255 : 0;
-      d[i] = binary;
-      d[i + 1] = binary;
-      d[i + 2] = binary;
+    const tensor = new ort.Tensor("uint8", input, [1, OCR_IMG_H, OCR_IMG_W, 3]);
+
+    const results = await ocrSession.run({ [ocrSession.inputNames[0]]: tensor });
+    const plateOut = results["plate"] || results[ocrSession.outputNames[0]];
+    const data = plateOut.data;      // [1,10,37]
+    const numClasses = OCR_ALPHABET.length; // 37
+
+    // 每個字元槽取 argmax
+    let text = "";
+    for (let slot = 0; slot < OCR_SLOTS; slot++) {
+      let bestIdx = 0;
+      let bestVal = -Infinity;
+      const base = slot * numClasses;
+      for (let c = 0; c < numClasses; c++) {
+        const v = data[base + c];
+        if (v > bestVal) { bestVal = v; bestIdx = c; }
+      }
+      const ch = OCR_ALPHABET[bestIdx];
+      if (ch !== OCR_PAD_CHAR) text += ch;
     }
-    cropCtx.putImageData(imgData, 0, 0);
 
-    // 進行 OCR 辨識
-    const res = await ocrWorker.recognize(cropCanvas);
-    const rawText = (res && res.data && res.data.text ? res.data.text : "")
-      .replace(/[^A-Z0-9]/gi, "")
-      .toUpperCase();
-
-    const strict = normalizeTaiwanPlate(rawText);
-    // 寬鬆後備：只要是 5~8 碼且英數混合，即視為可用的車牌候選（避免永遠卡在辨識中）
-    const loose = looseCandidate(rawText);
-    const plate = strict || loose;
+    const plate = normalizeTaiwanPlate(text) || (text.length >= 5 ? text : null);
 
     if (plate) {
-      // 記錄候選出現次數，取出現最多者作為最終結果（穩定顯示）
+      // 候選投票：取出現最多次者，穩定顯示並降低偶發誤判
       plateCandidateCounts[plate] = (plateCandidateCounts[plate] || 0) + 1;
-
-      // 選出目前票數最高的候選
       let best = plate;
       let bestCount = plateCandidateCounts[plate];
       for (const k in plateCandidateCounts) {
-        if (plateCandidateCounts[k] > bestCount) {
-          best = k;
-          bestCount = plateCandidateCounts[k];
-        }
+        if (plateCandidateCounts[k] > bestCount) { best = k; bestCount = plateCandidateCounts[k]; }
       }
 
       recognizedPlate = best;
       plateResultBadge.innerText = recognizedPlate;
       plateResultBadge.style.display = "block";
 
-      // 嚴格格式命中，或同一候選出現 2 次以上 → 視為確認
-      if (strict || bestCount >= 2) {
+      if (bestCount >= 2 || normalizeTaiwanPlate(best)) {
         patrolState = STATE.CONFIRMED;
         guideText.innerText = "辨識成功：" + recognizedPlate;
       } else {
         guideText.innerText = "偵測到：" + recognizedPlate + "（比對確認中）";
       }
     } else {
-      // 沒抓到有效車牌：回到明確的可繼續狀態，不會卡住
-      guideText.innerText = "車輛已鎖定 - 對準車牌";
+      guideText.innerText = "車牌已鎖定 - 對準車牌";
     }
   } catch (err) {
     console.warn("OCR 失敗:", err);
-    // 例外時務必離開「辨識中」狀態（issue 2 根因之一）
     guideText.innerText = "辨識暫停，重試中…";
   } finally {
     isOcrRunning = false;
@@ -359,22 +359,6 @@ function normalizeTaiwanPlate(s) {
   }
   // 沒有完全符合格式，但長度合理且英數混合 → 視為未確認，回傳 null 讓其繼續嘗試
   return null;
-}
-
-/**
- * 寬鬆車牌候選：不要求完全符合官方格式，只要是 5~8 碼英數混合即接受，
- * 並嘗試在英文字母與數字交界處插入連字號以貼近台灣車牌樣式。
- * 目的是避免因 OCR 雜訊導致永遠無法產生結果（卡在辨識中）。
- */
-function looseCandidate(s) {
-  if (!s) return null;
-  if (s.length < 5 || s.length > 8) return null;
-  if (!/[A-Z]/.test(s) || !/[0-9]/.test(s)) return null;
-
-  // 在「字母群↔數字群」的單一交界處加上連字號（例如 ABC1234 -> ABC-1234）
-  const m = s.match(/^([A-Z]+)(\d+)$/) || s.match(/^(\d+)([A-Z]+)$/);
-  if (m) return `${m[1]}-${m[2]}`;
-  return s; // 交界複雜時直接回傳清理後字串
 }
 
 function drawDetections(boxes) {
@@ -580,15 +564,11 @@ async function init() {
       executionProviders: ["webgl", "wasm"]
     });
 
-    statusElem.innerText = "3/3 初始化 OCR 引擎...";
-    // 初始化 Tesseract Worker
-    if (typeof Tesseract !== "undefined") {
-      ocrWorker = await Tesseract.createWorker("eng");
-      // 設定只辨識英文字母、數字與橫線
-      await ocrWorker.setParameters({
-        tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-",
-      });
-    }
+    statusElem.innerText = "3/3 載入車牌 OCR 模型...";
+    // OCR 模型輸入為 uint8，WebGL 不支援整數張量，改用 wasm
+    ocrSession = await ort.InferenceSession.create(OCR_MODEL_PATH, {
+      executionProviders: ["wasm"]
+    });
 
     statusElem.innerText = "巡邏中";
     runInference();
