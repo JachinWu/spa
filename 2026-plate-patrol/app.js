@@ -10,7 +10,7 @@ const plateResultBadge = document.getElementById("plate-result-badge");
 const shutterBtn = document.getElementById("shutter-btn");
 const flashOverlay = document.getElementById("flash-overlay");
 
-const MODEL_SIZE = 320;
+const MODEL_SIZE = 640;
 const MODEL_PATH = "./plate_best.onnx";
 const CONF_THRESHOLD = 0.35;   // 車牌專用模型，門檻略降以提升召回
 const IOU_THRESHOLD = 0.45;
