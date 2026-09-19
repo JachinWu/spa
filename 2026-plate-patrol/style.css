@@ -23,7 +23,6 @@ body, html {
   align-items: center;
 }
 
-/* 視訊畫面填滿螢幕並保持比例 */
 #webcam {
   position: absolute;
   width: 100%;
@@ -32,8 +31,153 @@ body, html {
   z-index: 1;
 }
 
-/* 疊加層 Canvas 必須與 Video 尺寸精確重合 */
 #overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+}
+
+#hud {
+  position: absolute;
+  top: env(safe-area-inset-top, 16px);
+  left: 16px;
+  right: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 3;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+#status, #fps {
+  background: rgba(0, 0, 0, 0.55);
+  padding: 6px 12px;
+  border-radius: 20px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+#fps {
+  color: #00ff88;
+}
+
+/* 中央引導框 */
+#guide-box {
+  position: absolute;
+  width: 72vw;
+  max-width: 320px;
+  height: 100px;
+  z-index: 2;
+  pointer-events: none;
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+  border-radius: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: border-color 0.2s ease;
+}
+
+#guide-box.active {
+  border-color: #00ff88;
+  background: rgba(0, 255, 136, 0.08);
+}
+
+.guide-text {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 13px;
+  letter-spacing: 1px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.corner {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-color: #00ff88;
+  border-style: solid;
+}
+.top-left { top: -2px; left: -2px; border-width: 3px 0 0 3px; }
+.top-right { top: -2px; right: -2px; border-width: 3px 3px 0 0; }
+.bottom-left { bottom: -2px; left: -2px; border-width: 0 0 3px 3px; }
+.bottom-right { bottom: -2px; right: -2px; border-width: 0 3px 3px 0; }
+
+/* 右下角時間戳 */
+#timestamp {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom, 20px) + 24px);
+  right: 16px;
+  z-index: 3;
+  color: #fff;
+  font-family: monospace;
+  font-size: 13px;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 5px 10px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+  pointer-events: none;
+}
+
+/* 底部快門控制列 */
+#controls {
+  position: absolute;
+  bottom: env(safe-area-inset-bottom, 24px);
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 4;
+}
+
+/* 相機圓形快門按鈕 */
+#shutter-btn {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: transparent;
+  border: 4px solid #ffffff;
+  padding: 4px;
+  cursor: pointer;
+  outline: none;
+  transition: transform 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#shutter-btn:active {
+  transform: scale(0.92);
+}
+
+.shutter-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #ffffff;
+  transition: background 0.15s ease;
+}
+
+#shutter-btn:active .shutter-inner {
+  background: #e0e0e0;
+}
+
+/* 拍照閃光層 */
+#flash-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #ffffff;
+  opacity: 0;
+  z-index: 99;
+  pointer-events: none;
+  transition: opacity 0.15s ease-out;
+}
   position: absolute;
   top: 0;
   left: 0;
