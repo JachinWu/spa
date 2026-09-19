@@ -11,22 +11,12 @@ const shutterBtn = document.getElementById("shutter-btn");
 const flashOverlay = document.getElementById("flash-overlay");
 
 const MODEL_SIZE = 320;
-const MODEL_PATH = "./yolov8n.onnx";
-const CONF_THRESHOLD = 0.45;
+const MODEL_PATH = "./plate_best.onnx";
+const CONF_THRESHOLD = 0.35;   // 車牌專用模型，門檻略降以提升召回
 const IOU_THRESHOLD = 0.45;
 
-const COCO_CLASSES = [
-  "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat",
-  "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat",
-  "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack",
-  "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball",
-  "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket",
-  "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
-  "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair",
-  "couch", "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse",
-  "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink",
-  "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
-];
+// 車牌專用模型僅有單一類別
+const PLATE_CLASSES = ["license_plate"];
 
 let session = null;
 let ocrWorker = null;
@@ -36,19 +26,21 @@ let lastOcrTime = 0;
 let recognizedPlate = "";
 let currentDetections = [];
 
-// === 車輛鎖定狀態機 ===
-// SEARCHING: 尚未鎖定車輛，禁止辨識車牌
-// LOCKED:    車輛已穩定進入引導框，開始嘗試辨識車牌
-// CONFIRMED: 已辨識出車牌
+// === 車牌偵測狀態機 ===
+// SEARCHING: 尚未偵測到車牌
+// LOCKED:    已偵測到車牌框，開始對車牌區域進行 OCR
+// CONFIRMED: 已辨識出車牌字元
 const STATE = { SEARCHING: "SEARCHING", LOCKED: "LOCKED", CONFIRMED: "CONFIRMED" };
 let patrolState = STATE.SEARCHING;
-// 車輛需連續數幀停留在框內才算「鎖定」，避免瞬間誤觸
-let vehicleInGuideStreak = 0;
-const LOCK_STREAK_REQUIRED = 5;      // 連續 5 幀命中才鎖定
-let framesWithoutVehicle = 0;
-const UNLOCK_GRACE_FRAMES = 15;      // 連續 15 幀無車才解除鎖定（避免抖動）
+// 車牌需連續數幀被偵測到才算「鎖定」，避免瞬間誤觸
+let plateDetectedStreak = 0;
+const LOCK_STREAK_REQUIRED = 3;      // 連續 3 幀偵測到車牌才鎖定
+let framesWithoutPlate = 0;
+const UNLOCK_GRACE_FRAMES = 15;      // 連續 15 幀無車牌才解除鎖定（避免抖動）
 // 車牌辨識結果需多次一致才確認，降低誤判
 let plateCandidateCounts = {};
+// 目前最佳車牌偵測框（原始視訊像素座標 [x1,y1,x2,y2]），供 OCR 裁切使用
+let bestPlateBox = null;
 
 let lastFrameTime = performance.now();
 let frameCount = 0;
@@ -225,44 +217,41 @@ function postprocess(outputTensor, scale, padX, padY) {
 }
 
 /**
- * 裁切引導框區域進行 OCR 文字辨識
+ * 裁切「偵測到的車牌框」區域進行 OCR 文字辨識
  */
 async function recognizePlateText() {
   if (isOcrRunning || !ocrWorker || video.readyState < 2) return;
-  // issue 1：未鎖定車輛時，絕不進行車牌辨識
-  if (patrolState === STATE.SEARCHING) return;
+  // 未鎖定車牌、或尚無車牌框時，不進行辨識
+  if (patrolState === STATE.SEARCHING || !bestPlateBox) return;
 
   isOcrRunning = true;
-  // 僅在尚未確認車牌時顯示「辨識中」，且結束時一定會離開此狀態（issue 2：不再卡住）
+  // 僅在尚未確認車牌時顯示「辨識中」，且結束時一定會離開此狀態（不再卡住）
   if (patrolState !== STATE.CONFIRMED) {
     guideText.innerText = "車牌辨識中…";
   }
 
   try {
-    const screenW = window.innerWidth;
-    const screenH = window.innerHeight;
     const videoW = video.videoWidth;
     const videoH = video.videoHeight;
 
-    const renderScale = Math.max(screenW / videoW, screenH / videoH);
-    const offsetX = (screenW - videoW * renderScale) / 2;
-    const offsetY = (screenH - videoH * renderScale) / 2;
+    // bestPlateBox 已是原始視訊像素座標 [x1,y1,x2,y2]
+    // 向外擴張一點邊界，避免切到字元
+    const [bx1, by1, bx2, by2] = bestPlateBox;
+    const padW = (bx2 - bx1) * 0.06;
+    const padH = (by2 - by1) * 0.12;
 
-    const guideRect = guideBox.getBoundingClientRect();
-
-    // 映射回視訊原始像素座標
-    const cropX = Math.max(0, (guideRect.left - offsetX) / renderScale);
-    const cropY = Math.max(0, (guideRect.top - offsetY) / renderScale);
-    const cropW = Math.min(videoW - cropX, guideRect.width / renderScale);
-    const cropH = Math.min(videoH - cropY, guideRect.height / renderScale);
+    const cropX = Math.max(0, bx1 - padW);
+    const cropY = Math.max(0, by1 - padH);
+    const cropW = Math.min(videoW - cropX, (bx2 - bx1) + padW * 2);
+    const cropH = Math.min(videoH - cropY, (by2 - by1) + padH * 2);
 
     if (cropW < 8 || cropH < 8) {
       guideText.innerText = "車輛已鎖定 - 對準車牌";
       return;
     }
 
-    // 放大裁切區以提升小字元辨識率
-    const scaleUp = 2;
+    // 放大裁切區以提升小字元辨識率（車牌框通常較小）
+    const scaleUp = 3;
     cropCanvas.width = Math.round(cropW * scaleUp);
     cropCanvas.height = Math.round(cropH * scaleUp);
 
@@ -400,12 +389,12 @@ function drawDetections(boxes) {
   const offsetX = (screenW - videoW * renderScale) / 2;
   const offsetY = (screenH - videoH * renderScale) / 2;
 
-  const guideRect = guideBox.getBoundingClientRect();
-  let vehicleInGuide = false;
+  let plateFound = false;
+  let bestScore = 0;
+  let bestBoxVideo = null;
 
   boxes.forEach(item => {
     const [x1, y1, x2, y2] = item.box;
-    const label = COCO_CLASSES[item.classId] || `ID: ${item.classId}`;
     const score = Math.round(item.score * 100);
 
     const sx = x1 * renderScale + offsetX;
@@ -413,48 +402,42 @@ function drawDetections(boxes) {
     const sw = (x2 - x1) * renderScale;
     const sh = (y2 - y1) * renderScale;
 
-    const isVehicle = ["car", "motorcycle", "bus", "truck"].includes(label);
-    const boxColor = isVehicle ? "#00ff88" : "#00bbff";
-
-    ctx.strokeStyle = boxColor;
-    ctx.lineWidth = isVehicle ? 3 : 2;
+    // 車牌框（綠色）
+    ctx.strokeStyle = "#00ff88";
+    ctx.lineWidth = 3;
     ctx.strokeRect(sx, sy, sw, sh);
 
-    const text = `${label.toUpperCase()} ${score}%`;
-    ctx.font = "bold 12px sans-serif";
+    const text = `PLATE ${score}%`;
+    ctx.font = "bold 13px sans-serif";
     const textWidth = ctx.measureText(text).width;
-
-    ctx.fillStyle = boxColor;
+    ctx.fillStyle = "#00ff88";
     ctx.fillRect(sx, sy - 20, textWidth + 10, 20);
     ctx.fillStyle = "#000";
     ctx.fillText(text, sx + 5, sy - 5);
 
-    if (isVehicle) {
-      if (
-        sx < guideRect.right &&
-        sx + sw > guideRect.left &&
-        sy < guideRect.bottom &&
-        sy + sh > guideRect.top
-      ) {
-        vehicleInGuide = true;
-      }
+    plateFound = true;
+    // 選出信心值最高的車牌作為 OCR 目標
+    if (item.score > bestScore) {
+      bestScore = item.score;
+      bestBoxVideo = [x1, y1, x2, y2]; // 原始視訊像素座標
     }
   });
 
-  if (vehicleInGuide) {
-    framesWithoutVehicle = 0;
-    vehicleInGuideStreak++;
+  if (plateFound) {
+    framesWithoutPlate = 0;
+    plateDetectedStreak++;
+    bestPlateBox = bestBoxVideo;
 
-    // 需連續多幀命中才正式鎖定車輛（issue 1：鎖定車輛才能進入辨識）
-    if (patrolState === STATE.SEARCHING && vehicleInGuideStreak >= LOCK_STREAK_REQUIRED) {
+    // 連續數幀偵測到車牌才正式鎖定
+    if (patrolState === STATE.SEARCHING && plateDetectedStreak >= LOCK_STREAK_REQUIRED) {
       patrolState = STATE.LOCKED;
       plateCandidateCounts = {};
-      guideText.innerText = "車輛已鎖定 - 對準車牌";
+      guideText.innerText = "車牌已鎖定 - 辨識中…";
     }
 
     guideBox.classList.add("active");
 
-    // 已鎖定（或已確認需持續更新）狀態才允許啟動車牌 OCR 辨識
+    // 已鎖定（或已確認需持續更新）狀態才啟動 OCR
     if (patrolState === STATE.LOCKED || patrolState === STATE.CONFIRMED) {
       const now = performance.now();
       if (!isOcrRunning && now - lastOcrTime > 800) {
@@ -463,17 +446,18 @@ function drawDetections(boxes) {
       }
     }
   } else {
-    vehicleInGuideStreak = 0;
-    framesWithoutVehicle++;
+    plateDetectedStreak = 0;
+    framesWithoutPlate++;
 
-    // 車輛離開需一段寬限幀數才解除鎖定，避免偵測抖動反覆重置
-    if (framesWithoutVehicle >= UNLOCK_GRACE_FRAMES) {
+    // 車牌離開需一段寬限幀數才解除鎖定，避免偵測抖動反覆重置
+    if (framesWithoutPlate >= UNLOCK_GRACE_FRAMES) {
       if (patrolState !== STATE.SEARCHING) {
         patrolState = STATE.SEARCHING;
         plateCandidateCounts = {};
       }
+      bestPlateBox = null;
       guideBox.classList.remove("active");
-      guideText.innerText = "請將車牌對準此框（等待鎖定車輛）";
+      guideText.innerText = "請將車牌對準此框";
     }
   }
 }
@@ -590,7 +574,7 @@ async function init() {
     updateCanvasSize();
     window.addEventListener("resize", updateCanvasSize);
 
-    statusElem.innerText = "2/3 載入 YOLO 模型...";
+    statusElem.innerText = "2/3 載入車牌偵測模型...";
     ort.env.wasm.numThreads = 1;
     session = await ort.InferenceSession.create(MODEL_PATH, {
       executionProviders: ["webgl", "wasm"]
