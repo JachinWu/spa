@@ -4,66 +4,73 @@ const ctx = overlay.getContext("2d");
 const statusElem = document.getElementById("status");
 const fpsElem = document.getElementById("fps");
 
-// FPS 計算用
 let lastFrameTime = performance.now();
 let frameCount = 0;
 let fps = 0;
 
-/**
- * 啟動相機串流
- */
+function showError(msg) {
+  statusElem.innerText = `錯誤: ${msg}`;
+  statusElem.style.background = "rgba(230, 40, 40, 0.85)";
+  console.error(msg);
+}
+
 async function setupCamera() {
-  // 檢查瀏覽器是否支援
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    throw new Error("此瀏覽器不支援相機存取功能");
+    throw new Error("此瀏覽器環境不支援或未允許 getUserMedia (請確認使用 HTTPS)");
   }
 
-  // 設定參數：優先後置鏡頭、720p（手機推論最兼顧流暢度的解析度）
+  // 使用寬鬆約束，避免部分手機硬體直接拋出 OverconstrainedError
   const constraints = {
     audio: false,
     video: {
       facingMode: { ideal: "environment" },
       width: { ideal: 1280 },
-      height: { ideal: 720 },
-    },
+      height: { ideal: 720 }
+    }
   };
 
+  statusElem.innerText = "等待鏡頭權限允許...";
   const stream = await navigator.mediaDevices.getUserMedia(constraints);
   video.srcObject = stream;
 
-  return new Promise((resolve) => {
-    video.onloadedmetadata = () => {
-      video.play();
-      resolve(video);
+  return new Promise((resolve, reject) => {
+    // 改用 loadeddata，並設置超時防呆
+    video.onloadeddata = async () => {
+      try {
+        await video.play();
+        resolve(video);
+      } catch (err) {
+        reject(new Error("自動播放失敗，請點擊螢幕重試: " + err.message));
+      }
     };
+
+    video.onerror = (e) => {
+      reject(new Error("Video 元素載入串流錯誤"));
+    };
+
+    // 5 秒逾時保護
+    setTimeout(() => {
+      if (video.readyState < 2) {
+        reject(new Error("相機串流載入超時 (readyState: " + video.readyState + ")"));
+      }
+    }, 5000);
   });
 }
 
-/**
- * 根據視窗尺寸調整 Overlay Canvas 解析度，避免繪圖模糊與拉伸
- */
 function updateCanvasSize() {
   const dpr = window.devicePixelRatio || 1;
   const width = window.innerWidth;
   const height = window.innerHeight;
 
-  // 實際渲染像素
   overlay.width = width * dpr;
   overlay.height = height * dpr;
-
-  // CSS 顯示大小
   overlay.style.width = `${width}px`;
   overlay.style.height = `${height}px`;
 
-  // 縮放繪圖上下文以配合 DPR
   ctx.scale(dpr, dpr);
 }
 
-/**
- * 主渲染迴圈（Step 1 先做繪圖測試與 FPS 統計）
- */
 function renderLoop() {
-  // 1. 計算 FPS
   const now = performance.now();
   frameCount++;
   if (now - lastFrameTime >= 1000) {
@@ -73,49 +80,49 @@ function renderLoop() {
     fpsElem.innerText = `FPS: ${fps}`;
   }
 
-  // 2. 清空前一幀畫布
   ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
-  // 3. 測試繪圖：在畫面正中央畫一個脈衝測試框（代表未來 YOLO 預測框的位置）
-  const boxW = 200;
-  const boxH = 70;
+  const boxW = 220;
+  const boxH = 75;
   const cx = window.innerWidth / 2 - boxW / 2;
   const cy = window.innerHeight / 2 - boxH / 2;
 
   ctx.strokeStyle = "#00ff88";
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 3;
   ctx.strokeRect(cx, cy, boxW, boxH);
 
-  // 繪製模擬標籤
   ctx.fillStyle = "#00ff88";
-  ctx.fillRect(cx, cy - 22, 110, 22);
+  ctx.fillRect(cx, cy - 24, 120, 24);
   ctx.fillStyle = "#000";
-  ctx.font = "bold 12px sans-serif";
-  ctx.fillText("PLATE 98%", cx + 6, cy - 6);
+  ctx.font = "bold 13px sans-serif";
+  ctx.fillText("PLATE TEST", cx + 8, cy - 7);
 
-  // 持續下一個畫面幀
   requestAnimationFrame(renderLoop);
 }
 
-/**
- * 初始化入口
- */
 async function init() {
   try {
-    statusElem.innerText = "請求相機權限中...";
+    statusElem.innerText = "正在偵測鏡頭設備...";
     await setupCamera();
-    
+
     updateCanvasSize();
     window.addEventListener("resize", updateCanvasSize);
 
-    statusElem.innerText = "鏡頭就緒 (純預覽)";
+    statusElem.innerText = "鏡頭就緒 (預覽中)";
     renderLoop();
   } catch (err) {
-    console.error(err);
-    statusElem.innerText = `錯誤: ${err.message || "無法存取鏡頭"}`;
-    statusElem.style.background = "rgba(255, 0, 0, 0.6)";
+    showError(err.name ? `${err.name}: ${err.message}` : err.message);
   }
 }
 
-// 啟動
+// 若有自動播放政策限制，允許點擊畫面喚醒播放
+window.addEventListener("click", () => {
+  if (video.srcObject && video.paused) {
+    video.play().then(() => {
+      statusElem.innerText = "鏡頭就緒 (預覽中)";
+      renderLoop();
+    }).catch(e => showError(e.message));
+  }
+}, { once: true });
+
 init();
