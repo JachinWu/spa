@@ -36,6 +36,20 @@ let lastOcrTime = 0;
 let recognizedPlate = "";
 let currentDetections = [];
 
+// === 車輛鎖定狀態機 ===
+// SEARCHING: 尚未鎖定車輛，禁止辨識車牌
+// LOCKED:    車輛已穩定進入引導框，開始嘗試辨識車牌
+// CONFIRMED: 已辨識出車牌
+const STATE = { SEARCHING: "SEARCHING", LOCKED: "LOCKED", CONFIRMED: "CONFIRMED" };
+let patrolState = STATE.SEARCHING;
+// 車輛需連續數幀停留在框內才算「鎖定」，避免瞬間誤觸
+let vehicleInGuideStreak = 0;
+const LOCK_STREAK_REQUIRED = 5;      // 連續 5 幀命中才鎖定
+let framesWithoutVehicle = 0;
+const UNLOCK_GRACE_FRAMES = 15;      // 連續 15 幀無車才解除鎖定（避免抖動）
+// 車牌辨識結果需多次一致才確認，降低誤判
+let plateCandidateCounts = {};
+
 let lastFrameTime = performance.now();
 let frameCount = 0;
 let fps = 0;
@@ -215,9 +229,14 @@ function postprocess(outputTensor, scale, padX, padY) {
  */
 async function recognizePlateText() {
   if (isOcrRunning || !ocrWorker || video.readyState < 2) return;
+  // issue 1：未鎖定車輛時，絕不進行車牌辨識
+  if (patrolState === STATE.SEARCHING) return;
 
   isOcrRunning = true;
-  guideText.innerText = "車牌辨識中...";
+  // 僅在尚未確認車牌時顯示「辨識中」，且結束時一定會離開此狀態（issue 2：不再卡住）
+  if (patrolState !== STATE.CONFIRMED) {
+    guideText.innerText = "車牌辨識中…";
+  }
 
   try {
     const screenW = window.innerWidth;
@@ -237,18 +256,36 @@ async function recognizePlateText() {
     const cropW = Math.min(videoW - cropX, guideRect.width / renderScale);
     const cropH = Math.min(videoH - cropY, guideRect.height / renderScale);
 
-    cropCanvas.width = cropW;
-    cropCanvas.height = cropH;
+    if (cropW < 8 || cropH < 8) {
+      guideText.innerText = "車輛已鎖定 - 對準車牌";
+      return;
+    }
 
-    // 將中央框影像擷取出來
-    cropCtx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+    // 放大裁切區以提升小字元辨識率
+    const scaleUp = 2;
+    cropCanvas.width = Math.round(cropW * scaleUp);
+    cropCanvas.height = Math.round(cropH * scaleUp);
 
-    // 二值化/高對比前處理，提升車牌字元辨識度
-    const imgData = cropCtx.getImageData(0, 0, cropW, cropH);
+    cropCtx.drawImage(
+      video,
+      cropX, cropY, cropW, cropH,
+      0, 0, cropCanvas.width, cropCanvas.height
+    );
+
+    // 灰階 + 自適應門檻（以平均亮度為基準）二值化，較固定門檻更耐光線變化
+    const imgData = cropCtx.getImageData(0, 0, cropCanvas.width, cropCanvas.height);
     const d = imgData.data;
-    for (let i = 0; i < d.length; i += 4) {
-      const v = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114);
-      const binary = v > 120 ? 255 : 0;
+    let sum = 0;
+    const gray = new Float32Array(d.length / 4);
+    for (let i = 0, g = 0; i < d.length; i += 4, g++) {
+      const v = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+      gray[g] = v;
+      sum += v;
+    }
+    const mean = sum / gray.length;
+    const threshold = mean * 0.9; // 略低於平均，保留深色字元
+    for (let i = 0, g = 0; i < d.length; i += 4, g++) {
+      const binary = gray[g] > threshold ? 255 : 0;
       d[i] = binary;
       d[i + 1] = binary;
       d[i + 2] = binary;
@@ -257,22 +294,66 @@ async function recognizePlateText() {
 
     // 進行 OCR 辨識
     const res = await ocrWorker.recognize(cropCanvas);
-    const rawText = res.data.text.replace(/[^A-Z0-9-]/gi, "").toUpperCase();
+    const rawText = (res && res.data && res.data.text ? res.data.text : "")
+      .replace(/[^A-Z0-9]/gi, "")
+      .toUpperCase();
 
-    // 檢查是否有 5~8 碼英數字 (台灣車牌格式如 ABC-1234, 1234-AB, 9999-AA)
-    if (rawText.length >= 4 && rawText.length <= 8) {
-      recognizedPlate = rawText;
-      plateResultBadge.innerText = recognizedPlate;
-      plateResultBadge.style.display = "block";
-      guideText.innerText = "辨識成功";
+    const plate = normalizeTaiwanPlate(rawText);
+
+    if (plate) {
+      // 候選投票：同一車牌需被辨識到 2 次以上才確認，降低誤判
+      plateCandidateCounts[plate] = (plateCandidateCounts[plate] || 0) + 1;
+      if (plateCandidateCounts[plate] >= 2 || patrolState === STATE.CONFIRMED) {
+        recognizedPlate = plate;
+        plateResultBadge.innerText = recognizedPlate;
+        plateResultBadge.style.display = "block";
+        patrolState = STATE.CONFIRMED;
+        guideText.innerText = "辨識成功：" + recognizedPlate;
+      } else {
+        guideText.innerText = "辨識中…（比對確認）";
+      }
     } else {
+      // 沒抓到有效車牌：回到明確的可繼續狀態，不會卡住
       guideText.innerText = "車輛已鎖定 - 對準車牌";
     }
   } catch (err) {
     console.warn("OCR 失敗:", err);
+    // 例外時務必離開「辨識中」狀態（issue 2 根因之一）
+    guideText.innerText = "辨識暫停，重試中…";
   } finally {
     isOcrRunning = false;
   }
+}
+
+/**
+ * 驗證並正規化台灣車牌格式。
+ * 支援常見格式：
+ *   汽車新式  AAA-9999 / AAA9999 (3英+4數)
+ *   汽車舊式  9999-AA  / 99AA / AA9999 等 (5~7碼英數混合)
+ *   機車      AAA-999 / 999-AAA / AAA9999
+ * 回傳格式化後字串（含連字號）或 null。
+ */
+function normalizeTaiwanPlate(s) {
+  if (!s) return null;
+  // 長度必須 5~7 碼英數字
+  if (s.length < 5 || s.length > 7) return null;
+  // 必須同時含有英文字母與數字（純字母或純數字通常是誤判）
+  if (!/[A-Z]/.test(s) || !/[0-9]/.test(s)) return null;
+
+  const patterns = [
+    { re: /^([A-Z]{3})(\d{4})$/, fmt: (m) => `${m[1]}-${m[2]}` },   // AAA-9999
+    { re: /^(\d{4})([A-Z]{2})$/, fmt: (m) => `${m[1]}-${m[2]}` },   // 9999-AA
+    { re: /^([A-Z]{2})(\d{4})$/, fmt: (m) => `${m[1]}-${m[2]}` },   // AA-9999
+    { re: /^([A-Z]{3})(\d{3})$/, fmt: (m) => `${m[1]}-${m[2]}` },   // AAA-999 (機車)
+    { re: /^(\d{3})([A-Z]{3})$/, fmt: (m) => `${m[1]}-${m[2]}` },   // 999-AAA
+    { re: /^(\d{2})([A-Z]{2})(\d{2})$/, fmt: (m) => `${m[1]}${m[2]}-${m[3]}` }, // 99AA-99
+  ];
+  for (const p of patterns) {
+    const m = s.match(p.re);
+    if (m) return p.fmt(m);
+  }
+  // 沒有完全符合格式，但長度合理且英數混合 → 視為未確認，回傳 null 讓其繼續嘗試
+  return null;
 }
 
 function drawDetections(boxes) {
@@ -329,16 +410,39 @@ function drawDetections(boxes) {
   });
 
   if (vehicleInGuide) {
+    framesWithoutVehicle = 0;
+    vehicleInGuideStreak++;
+
+    // 需連續多幀命中才正式鎖定車輛（issue 1：鎖定車輛才能進入辨識）
+    if (patrolState === STATE.SEARCHING && vehicleInGuideStreak >= LOCK_STREAK_REQUIRED) {
+      patrolState = STATE.LOCKED;
+      plateCandidateCounts = {};
+      guideText.innerText = "車輛已鎖定 - 對準車牌";
+    }
+
     guideBox.classList.add("active");
-    // 當車輛進入框內，每 800ms 觸發一次 OCR
-    const now = performance.now();
-    if (now - lastOcrTime > 800) {
-      lastOcrTime = now;
-      recognizePlateText();
+
+    // 只有在「已鎖定」狀態才允許啟動車牌 OCR 辨識
+    if (patrolState === STATE.LOCKED) {
+      const now = performance.now();
+      if (now - lastOcrTime > 800) {
+        lastOcrTime = now;
+        recognizePlateText();
+      }
     }
   } else {
-    guideBox.classList.remove("active");
-    guideText.innerText = "請將車牌對準此框";
+    vehicleInGuideStreak = 0;
+    framesWithoutVehicle++;
+
+    // 車輛離開需一段寬限幀數才解除鎖定，避免偵測抖動反覆重置
+    if (framesWithoutVehicle >= UNLOCK_GRACE_FRAMES) {
+      if (patrolState !== STATE.SEARCHING) {
+        patrolState = STATE.SEARCHING;
+        plateCandidateCounts = {};
+      }
+      guideBox.classList.remove("active");
+      guideText.innerText = "請將車牌對準此框（等待鎖定車輛）";
+    }
   }
 }
 
@@ -410,12 +514,39 @@ function takePhoto() {
   cCtx.fillStyle = "#00ff88";
   cCtx.fillText(timeStr, vw - tw - 20, vh - 28);
 
-  // 4. 下載圖檔
+  // 4. 儲存圖檔（跨平台：桌機用 download，行動裝置以 Blob URL 開啟供長按儲存）
   const dateTag = timeStr.replace(/[- :]/g, "");
-  const link = document.createElement("a");
-  link.download = `plate_${recognizedPlate || "scan"}_${dateTag}.jpg`;
-  link.href = captureCanvas.toDataURL("image/jpeg", 0.92);
-  link.click();
+  const fileName = `plate_${recognizedPlate || "scan"}_${dateTag}.jpg`;
+
+  captureCanvas.toBlob((blob) => {
+    if (!blob) {
+      // 極端後備：改用 dataURL 直接下載
+      const link = document.createElement("a");
+      link.download = fileName;
+      link.href = captureCanvas.toDataURL("image/jpeg", 0.92);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.download = fileName;
+    link.href = url;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // 行動裝置（尤其 iOS Safari）常忽略 download 屬性，另開分頁供使用者長按儲存
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      window.open(url, "_blank");
+    }
+
+    // 釋放記憶體
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }, "image/jpeg", 0.92);
 }
 
 shutterBtn.addEventListener("click", takePhoto);
@@ -450,60 +581,5 @@ async function init() {
   }
 }
 
-init();
- = COCO_CLASSES[item.classId] || `ID: ${item.classId}`;
-    const score = Math.round(item.score * 100);
-
-    cCtx.strokeStyle = "#00ff88";
-    cCtx.lineWidth = 4;
-    cCtx.strokeRect(x1, y1, x2 - x1, y2 - y1);
-
-    const text = `${label.toUpperCase()} ${score}%`;
-    cCtx.font = "bold 20px monospace";
-    const tw = cCtx.measureText(text).width;
-    cCtx.fillStyle = "#00ff88";
-    cCtx.fillRect(x1, y1 - 28, tw + 14, 28);
-    cCtx.fillStyle = "#000";
-    cCtx.fillText(text, x1 + 7, y1 - 8);
-  });
-
-  // 3. 右下角烙印日期時間浮水印
-  const timeStr = getFormattedDateTime();
-  cCtx.font = "bold 22px monospace";
-  const tw = cCtx.measureText(timeStr).width;
-  cCtx.fillStyle = "rgba(0, 0, 0, 0.65)";
-  cCtx.fillRect(vw - tw - 30, vh - 50, tw + 20, 36);
-  cCtx.fillStyle = "#ffffff";
-  cCtx.fillText(timeStr, vw - tw - 20, vh - 25);
-
-  // 4. 下載圖片
-  const dateTag = timeStr.replace(/[- :]/g, "");
-  const link = document.createElement("a");
-  link.download = `plate_capture_${dateTag}.jpg`;
-  link.href = captureCanvas.toDataURL("image/jpeg", 0.92);
-  link.click();
-}
-
-shutterBtn.addEventListener("click", takePhoto);
-
-async function init() {
-  try {
-    statusElem.innerText = "正在啟動鏡頭...";
-    await setupCamera();
-    updateCanvasSize();
-    window.addEventListener("resize", updateCanvasSize);
-
-    statusElem.innerText = "載入 YOLO 模型中...";
-    ort.env.wasm.numThreads = 1;
-    session = await ort.InferenceSession.create(MODEL_PATH, {
-      executionProviders: ["webgl", "wasm"]
-    });
-
-    statusElem.innerText = "巡邏中";
-    runInference();
-  } catch (err) {
-    showError(`錯誤: ${err.message || err}`);
-  }
-}
 
 init();
