@@ -3,8 +3,12 @@ const overlay = document.getElementById("overlay");
 const ctx = overlay.getContext("2d");
 const statusElem = document.getElementById("status");
 const fpsElem = document.getElementById("fps");
+const timestampElem = document.getElementById("timestamp");
+const guideBox = document.getElementById("guide-box");
+const guideText = document.getElementById("guide-text");
+const shutterBtn = document.getElementById("shutter-btn");
+const flashOverlay = document.getElementById("flash-overlay");
 
-// 設定：因為匯出時是 imgsz=320，此處鎖定 320
 const MODEL_SIZE = 320;
 const MODEL_PATH = "./yolov8n.onnx";
 const CONF_THRESHOLD = 0.45;
@@ -28,17 +32,7 @@ let isProcessing = false;
 let lastFrameTime = performance.now();
 let frameCount = 0;
 let fps = 0;
-
-// 全域錯誤捕捉，直接顯示在螢幕上
-window.addEventListener("error", (e) => {
-  showError(`全域錯誤: ${e.message} (行號: ${e.lineno})`);
-});
-
-function showError(msg) {
-  statusElem.innerText = msg;
-  statusElem.style.background = "rgba(230, 40, 40, 0.9)";
-  console.error(msg);
-}
+let currentDetections = [];
 
 // 離屏 Canvas 供前處理抽幀
 const offscreenCanvas = document.createElement("canvas");
@@ -46,11 +40,30 @@ offscreenCanvas.width = MODEL_SIZE;
 offscreenCanvas.height = MODEL_SIZE;
 const offscreenCtx = offscreenCanvas.getContext("2d", { willReadFrequently: true });
 
-async function setupCamera() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    throw new Error("瀏覽器不支援相機或非 HTTPS 環境");
-  }
+function getFormattedDateTime() {
+  const now = new Date();
+  const Y = now.getFullYear();
+  const M = String(now.getMonth() + 1).padStart(2, "0");
+  const D = String(now.getDate()).padStart(2, "0");
+  const h = String(now.getHours()).padStart(2, "0");
+  const m = String(now.getMinutes()).padStart(2, "0");
+  const s = String(now.getSeconds()).padStart(2, "0");
+  return `${Y}-${M}-${D} ${h}:${m}:${s}`;
+}
 
+// 每秒更新右下角時間
+setInterval(() => {
+  timestampElem.innerText = getFormattedDateTime();
+}, 1000);
+timestampElem.innerText = getFormattedDateTime();
+
+function showError(msg) {
+  statusElem.innerText = msg;
+  statusElem.style.background = "rgba(230, 40, 40, 0.9)";
+  console.error(msg);
+}
+
+async function setupCamera() {
   const constraints = {
     audio: false,
     video: {
@@ -69,10 +82,10 @@ async function setupCamera() {
         await video.play();
         resolve(video);
       } catch (err) {
-        reject(new Error("自動播放被阻擋，請點擊螢幕: " + err.message));
+        reject(new Error("相機播放受阻: " + err.message));
       }
     };
-    video.onerror = () => reject(new Error("Video 元素載入串流失敗"));
+    video.onerror = () => reject(new Error("相機串流異常"));
   });
 }
 
@@ -134,7 +147,6 @@ function iou(boxA, boxB) {
 }
 
 function postprocess(outputTensor, scale, padX, padY) {
-  // 安全取出維度，避免解構語法問題
   const channels = outputTensor.dims[1];
   const numBoxes = outputTensor.dims[2];
   const data = outputTensor.data;
@@ -201,6 +213,10 @@ function drawDetections(boxes) {
   const offsetX = (screenW - videoW * renderScale) / 2;
   const offsetY = (screenH - videoH * renderScale) / 2;
 
+  // 取得中央引導框的螢幕幾何範圍
+  const guideRect = guideBox.getBoundingClientRect();
+  let vehicleTargetInGuide = false;
+
   boxes.forEach(item => {
     const [x1, y1, x2, y2] = item.box;
     const label = COCO_CLASSES[item.classId] || `ID: ${item.classId}`;
@@ -214,10 +230,12 @@ function drawDetections(boxes) {
     const isVehicle = ["car", "motorcycle", "bus", "truck"].includes(label);
     const boxColor = isVehicle ? "#00ff88" : "#00bbff";
 
+    // 繪製物體檢測框
     ctx.strokeStyle = boxColor;
     ctx.lineWidth = isVehicle ? 3 : 2;
     ctx.strokeRect(sx, sy, sw, sh);
 
+    // 標籤
     const text = `${label.toUpperCase()} ${score}%`;
     ctx.font = "bold 12px sans-serif";
     const textWidth = ctx.measureText(text).width;
@@ -227,7 +245,30 @@ function drawDetections(boxes) {
 
     ctx.fillStyle = "#000";
     ctx.fillText(text, sx + 5, sy - 5);
+
+    // 判斷車輛是否涵蓋中央引導框
+    if (isVehicle) {
+      if (
+        sx < guideRect.right &&
+        sx + sw > guideRect.left &&
+        sy < guideRect.bottom &&
+        sy + sh > guideRect.top
+      ) {
+        vehicleTargetInGuide = true;
+      }
+    }
   });
+
+  // 更新引導框狀態
+  if (vehicleTargetInGuide) {
+    guideBox.classList.add("active");
+    guideText.innerText = "車輛已鎖定 - 準備辨識";
+    guideText.style.color = "#00ff88";
+  } else {
+    guideBox.classList.remove("active");
+    guideText.innerText = "請將車牌對準此框";
+    guideText.style.color = "rgba(255, 255, 255, 0.75)";
+  }
 }
 
 async function runInference() {
@@ -244,8 +285,8 @@ async function runInference() {
     const results = await session.run(feeds);
     const outputTensor = results[session.outputNames[0]];
 
-    const boxes = postprocess(outputTensor, scale, padX, padY);
-    drawDetections(boxes);
+    currentDetections = postprocess(outputTensor, scale, padX, padY);
+    drawDetections(currentDetections);
 
     frameCount++;
     const now = performance.now();
@@ -263,38 +304,83 @@ async function runInference() {
   }
 }
 
+/**
+ * 快門拍照並下載圖檔
+ */
+function takePhoto() {
+  // 觸發閃光動畫
+  flashOverlay.style.opacity = "0.85";
+  setTimeout(() => {
+    flashOverlay.style.opacity = "0";
+  }, 120);
+
+  // 建立一張與相機原始解析度一致的畫布
+  const captureCanvas = document.createElement("canvas");
+  const vw = video.videoWidth || 1280;
+  const vh = video.videoHeight || 720;
+  captureCanvas.width = vw;
+  captureCanvas.height = vh;
+  const cCtx = captureCanvas.getContext("2d");
+
+  // 1. 繪製相機底圖
+  cCtx.drawImage(video, 0, 0, vw, vh);
+
+  // 2. 繪製當前偵測框
+  currentDetections.forEach(item => {
+    const [x1, y1, x2, y2] = item.box;
+    const label = COCO_CLASSES[item.classId] || `ID: ${item.classId}`;
+    const score = Math.round(item.score * 100);
+
+    cCtx.strokeStyle = "#00ff88";
+    cCtx.lineWidth = 4;
+    cCtx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+
+    const text = `${label.toUpperCase()} ${score}%`;
+    cCtx.font = "bold 20px monospace";
+    const tw = cCtx.measureText(text).width;
+    cCtx.fillStyle = "#00ff88";
+    cCtx.fillRect(x1, y1 - 28, tw + 14, 28);
+    cCtx.fillStyle = "#000";
+    cCtx.fillText(text, x1 + 7, y1 - 8);
+  });
+
+  // 3. 右下角烙印日期時間浮水印
+  const timeStr = getFormattedDateTime();
+  cCtx.font = "bold 22px monospace";
+  const tw = cCtx.measureText(timeStr).width;
+  cCtx.fillStyle = "rgba(0, 0, 0, 0.65)";
+  cCtx.fillRect(vw - tw - 30, vh - 50, tw + 20, 36);
+  cCtx.fillStyle = "#ffffff";
+  cCtx.fillText(timeStr, vw - tw - 20, vh - 25);
+
+  // 4. 下載圖片
+  const dateTag = timeStr.replace(/[- :]/g, "");
+  const link = document.createElement("a");
+  link.download = `plate_capture_${dateTag}.jpg`;
+  link.href = captureCanvas.toDataURL("image/jpeg", 0.92);
+  link.click();
+}
+
+shutterBtn.addEventListener("click", takePhoto);
+
 async function init() {
   try {
-    statusElem.innerText = "1/3 正在啟動鏡頭...";
+    statusElem.innerText = "正在啟動鏡頭...";
     await setupCamera();
     updateCanvasSize();
     window.addEventListener("resize", updateCanvasSize);
 
-    statusElem.innerText = "2/3 載入 YOLO 模型中 (約 6MB)...";
-    
-    // 檢查 onnxruntime 是否正確載入
-    if (typeof ort === "undefined") {
-      throw new Error("ort.min.js CDN 未能成功載入，請檢查網路連線");
-    }
-
+    statusElem.innerText = "載入 YOLO 模型中...";
     ort.env.wasm.numThreads = 1;
-    // 優先 WebGL，若瀏覽器不支援則降級至 WASM
     session = await ort.InferenceSession.create(MODEL_PATH, {
       executionProviders: ["webgl", "wasm"]
     });
 
-    statusElem.innerText = "3/3 偵測運作中";
+    statusElem.innerText = "巡邏中";
     runInference();
   } catch (err) {
     showError(`錯誤: ${err.message || err}`);
   }
 }
-
-// 點擊喚醒播放保險機制
-window.addEventListener("click", () => {
-  if (video.srcObject && video.paused) {
-    video.play().catch(e => showError("播放失敗: " + e.message));
-  }
-}, { once: true });
 
 init();
