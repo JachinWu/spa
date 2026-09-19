@@ -6,6 +6,7 @@ const fpsElem = document.getElementById("fps");
 const timestampElem = document.getElementById("timestamp");
 const guideBox = document.getElementById("guide-box");
 const guideText = document.getElementById("guide-text");
+const plateResultBadge = document.getElementById("plate-result-badge");
 const shutterBtn = document.getElementById("shutter-btn");
 const flashOverlay = document.getElementById("flash-overlay");
 
@@ -28,17 +29,26 @@ const COCO_CLASSES = [
 ];
 
 let session = null;
+let ocrWorker = null;
 let isProcessing = false;
+let isOcrRunning = false;
+let lastOcrTime = 0;
+let recognizedPlate = "";
+let currentDetections = [];
+
 let lastFrameTime = performance.now();
 let frameCount = 0;
 let fps = 0;
-let currentDetections = [];
 
-// 離屏 Canvas 供前處理抽幀
+// 離屏 Canvas
 const offscreenCanvas = document.createElement("canvas");
 offscreenCanvas.width = MODEL_SIZE;
 offscreenCanvas.height = MODEL_SIZE;
 const offscreenCtx = offscreenCanvas.getContext("2d", { willReadFrequently: true });
+
+// OCR 裁切專用 Canvas
+const cropCanvas = document.createElement("canvas");
+const cropCtx = cropCanvas.getContext("2d", { willReadFrequently: true });
 
 function getFormattedDateTime() {
   const now = new Date();
@@ -51,7 +61,6 @@ function getFormattedDateTime() {
   return `${Y}-${M}-${D} ${h}:${m}:${s}`;
 }
 
-// 每秒更新右下角時間
 setInterval(() => {
   timestampElem.innerText = getFormattedDateTime();
 }, 1000);
@@ -82,10 +91,10 @@ async function setupCamera() {
         await video.play();
         resolve(video);
       } catch (err) {
-        reject(new Error("相機播放受阻: " + err.message));
+        reject(err);
       }
     };
-    video.onerror = () => reject(new Error("相機串流異常"));
+    video.onerror = () => reject(new Error("相機啟動異常"));
   });
 }
 
@@ -201,6 +210,71 @@ function postprocess(outputTensor, scale, padX, padY) {
   return finalBoxes;
 }
 
+/**
+ * 裁切引導框區域進行 OCR 文字辨識
+ */
+async function recognizePlateText() {
+  if (isOcrRunning || !ocrWorker || video.readyState < 2) return;
+
+  isOcrRunning = true;
+  guideText.innerText = "車牌辨識中...";
+
+  try {
+    const screenW = window.innerWidth;
+    const screenH = window.innerHeight;
+    const videoW = video.videoWidth;
+    const videoH = video.videoHeight;
+
+    const renderScale = Math.max(screenW / videoW, screenH / videoH);
+    const offsetX = (screenW - videoW * renderScale) / 2;
+    const offsetY = (screenH - videoH * renderScale) / 2;
+
+    const guideRect = guideBox.getBoundingClientRect();
+
+    // 映射回視訊原始像素座標
+    const cropX = Math.max(0, (guideRect.left - offsetX) / renderScale);
+    const cropY = Math.max(0, (guideRect.top - offsetY) / renderScale);
+    const cropW = Math.min(videoW - cropX, guideRect.width / renderScale);
+    const cropH = Math.min(videoH - cropY, guideRect.height / renderScale);
+
+    cropCanvas.width = cropW;
+    cropCanvas.height = cropH;
+
+    // 將中央框影像擷取出來
+    cropCtx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+    // 二值化/高對比前處理，提升車牌字元辨識度
+    const imgData = cropCtx.getImageData(0, 0, cropW, cropH);
+    const d = imgData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const v = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114);
+      const binary = v > 120 ? 255 : 0;
+      d[i] = binary;
+      d[i + 1] = binary;
+      d[i + 2] = binary;
+    }
+    cropCtx.putImageData(imgData, 0, 0);
+
+    // 進行 OCR 辨識
+    const res = await ocrWorker.recognize(cropCanvas);
+    const rawText = res.data.text.replace(/[^A-Z0-9-]/gi, "").toUpperCase();
+
+    // 檢查是否有 5~8 碼英數字 (台灣車牌格式如 ABC-1234, 1234-AB, 9999-AA)
+    if (rawText.length >= 4 && rawText.length <= 8) {
+      recognizedPlate = rawText;
+      plateResultBadge.innerText = recognizedPlate;
+      plateResultBadge.style.display = "block";
+      guideText.innerText = "辨識成功";
+    } else {
+      guideText.innerText = "車輛已鎖定 - 對準車牌";
+    }
+  } catch (err) {
+    console.warn("OCR 失敗:", err);
+  } finally {
+    isOcrRunning = false;
+  }
+}
+
 function drawDetections(boxes) {
   ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
@@ -213,9 +287,8 @@ function drawDetections(boxes) {
   const offsetX = (screenW - videoW * renderScale) / 2;
   const offsetY = (screenH - videoH * renderScale) / 2;
 
-  // 取得中央引導框的螢幕幾何範圍
   const guideRect = guideBox.getBoundingClientRect();
-  let vehicleTargetInGuide = false;
+  let vehicleInGuide = false;
 
   boxes.forEach(item => {
     const [x1, y1, x2, y2] = item.box;
@@ -230,23 +303,19 @@ function drawDetections(boxes) {
     const isVehicle = ["car", "motorcycle", "bus", "truck"].includes(label);
     const boxColor = isVehicle ? "#00ff88" : "#00bbff";
 
-    // 繪製物體檢測框
     ctx.strokeStyle = boxColor;
     ctx.lineWidth = isVehicle ? 3 : 2;
     ctx.strokeRect(sx, sy, sw, sh);
 
-    // 標籤
     const text = `${label.toUpperCase()} ${score}%`;
     ctx.font = "bold 12px sans-serif";
     const textWidth = ctx.measureText(text).width;
 
     ctx.fillStyle = boxColor;
     ctx.fillRect(sx, sy - 20, textWidth + 10, 20);
-
     ctx.fillStyle = "#000";
     ctx.fillText(text, sx + 5, sy - 5);
 
-    // 判斷車輛是否涵蓋中央引導框
     if (isVehicle) {
       if (
         sx < guideRect.right &&
@@ -254,20 +323,22 @@ function drawDetections(boxes) {
         sy < guideRect.bottom &&
         sy + sh > guideRect.top
       ) {
-        vehicleTargetInGuide = true;
+        vehicleInGuide = true;
       }
     }
   });
 
-  // 更新引導框狀態
-  if (vehicleTargetInGuide) {
+  if (vehicleInGuide) {
     guideBox.classList.add("active");
-    guideText.innerText = "車輛已鎖定 - 準備辨識";
-    guideText.style.color = "#00ff88";
+    // 當車輛進入框內，每 800ms 觸發一次 OCR
+    const now = performance.now();
+    if (now - lastOcrTime > 800) {
+      lastOcrTime = now;
+      recognizePlateText();
+    }
   } else {
     guideBox.classList.remove("active");
     guideText.innerText = "請將車牌對準此框";
-    guideText.style.color = "rgba(255, 255, 255, 0.75)";
   }
 }
 
@@ -297,7 +368,7 @@ async function runInference() {
       fpsElem.innerText = `FPS: ${fps}`;
     }
   } catch (err) {
-    console.error("推論錯誤:", err);
+    console.error("推論出錯:", err);
   } finally {
     isProcessing = false;
     requestAnimationFrame(runInference);
@@ -305,16 +376,14 @@ async function runInference() {
 }
 
 /**
- * 快門拍照並下載圖檔
+ * 拍照功能
  */
 function takePhoto() {
-  // 觸發閃光動畫
   flashOverlay.style.opacity = "0.85";
   setTimeout(() => {
     flashOverlay.style.opacity = "0";
   }, 120);
 
-  // 建立一張與相機原始解析度一致的畫布
   const captureCanvas = document.createElement("canvas");
   const vw = video.videoWidth || 1280;
   const vh = video.videoHeight || 720;
@@ -322,13 +391,67 @@ function takePhoto() {
   captureCanvas.height = vh;
   const cCtx = captureCanvas.getContext("2d");
 
-  // 1. 繪製相機底圖
+  // 1. 繪製視訊底圖
   cCtx.drawImage(video, 0, 0, vw, vh);
 
-  // 2. 繪製當前偵測框
-  currentDetections.forEach(item => {
-    const [x1, y1, x2, y2] = item.box;
-    const label = COCO_CLASSES[item.classId] || `ID: ${item.classId}`;
+  // 2. 烙印當前辨識結果
+  if (recognizedPlate) {
+    cCtx.fillStyle = "#00ff88";
+    cCtx.font = "bold 32px monospace";
+    cCtx.fillText(`PLATE: ${recognizedPlate}`, 30, 60);
+  }
+
+  // 3. 右下角烙印時間
+  const timeStr = getFormattedDateTime();
+  cCtx.font = "bold 24px monospace";
+  const tw = cCtx.measureText(timeStr).width;
+  cCtx.fillStyle = "rgba(0, 0, 0, 0.7)";
+  cCtx.fillRect(vw - tw - 30, vh - 55, tw + 20, 36);
+  cCtx.fillStyle = "#00ff88";
+  cCtx.fillText(timeStr, vw - tw - 20, vh - 28);
+
+  // 4. 下載圖檔
+  const dateTag = timeStr.replace(/[- :]/g, "");
+  const link = document.createElement("a");
+  link.download = `plate_${recognizedPlate || "scan"}_${dateTag}.jpg`;
+  link.href = captureCanvas.toDataURL("image/jpeg", 0.92);
+  link.click();
+}
+
+shutterBtn.addEventListener("click", takePhoto);
+
+async function init() {
+  try {
+    statusElem.innerText = "1/3 啟動相機...";
+    await setupCamera();
+    updateCanvasSize();
+    window.addEventListener("resize", updateCanvasSize);
+
+    statusElem.innerText = "2/3 載入 YOLO 模型...";
+    ort.env.wasm.numThreads = 1;
+    session = await ort.InferenceSession.create(MODEL_PATH, {
+      executionProviders: ["webgl", "wasm"]
+    });
+
+    statusElem.innerText = "3/3 初始化 OCR 引擎...";
+    // 初始化 Tesseract Worker
+    if (typeof Tesseract !== "undefined") {
+      ocrWorker = await Tesseract.createWorker("eng");
+      // 設定只辨識英文字母、數字與橫線
+      await ocrWorker.setParameters({
+        tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-",
+      });
+    }
+
+    statusElem.innerText = "巡邏中";
+    runInference();
+  } catch (err) {
+    showError(`錯誤: ${err.message || err}`);
+  }
+}
+
+init();
+ = COCO_CLASSES[item.classId] || `ID: ${item.classId}`;
     const score = Math.round(item.score * 100);
 
     cCtx.strokeStyle = "#00ff88";
